@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logQuote } from "@/lib/tools/logQuote";
 import { getStore } from "@/lib/db";
 import { publish } from "@/lib/db/events";
+import { recordToolCall } from "@/lib/tools/recordToolCall";
 
 /**
  * POST /api/tools/log_quote
@@ -10,7 +11,16 @@ import { publish } from "@/lib/db/events";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
+    const b = body as Record<string, unknown>;
     const result = await logQuote(body);
+
+    await recordToolCall({
+      session_id: (b.session_id as string) || undefined,
+      job_id: (b.job_id as string) || undefined,
+      tool_name: "log_quote",
+      payload: { request: b, result },
+    });
+
     if (!result.ok) {
       const status =
         result.code === "SESSION_NOT_FOUND" || result.code === "JOB_NOT_FOUND"

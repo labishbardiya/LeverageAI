@@ -363,12 +363,14 @@ export function goldenSessionsToEvents(golden: GoldenRun): MockEvent[] {
 
 export async function loadGoldenRun(
   verticalId: string,
+  mode: "default" | "live" = "default",
 ): Promise<GoldenRun | null> {
   try {
-    const res = await fetch(
-      `/api/demo/replay?vertical=${encodeURIComponent(verticalId)}`,
-      { cache: "no-store" },
-    );
+    const q = new URLSearchParams({
+      vertical: verticalId,
+      ...(mode === "live" ? { live: "1" } : {}),
+    });
+    const res = await fetch(`/api/demo/replay?${q}`, { cache: "no-store" });
     if (res.ok) return (await res.json()) as GoldenRun;
   } catch {
     /* fall through */
@@ -376,9 +378,11 @@ export async function loadGoldenRun(
 
   try {
     const path =
-      verticalId === "movers"
-        ? "/golden/run-movers.json"
-        : "/golden/run.json";
+      mode === "live"
+        ? "/golden/live-run.json"
+        : verticalId === "movers"
+          ? "/golden/run-movers.json"
+          : "/golden/run.json";
     const res = await fetch(path, { cache: "no-store" });
     if (res.ok) return (await res.json()) as GoldenRun;
   } catch {

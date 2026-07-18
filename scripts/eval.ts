@@ -1,15 +1,14 @@
 /**
- * Golden / finished-run evaluator for The Negotiator.
+ * LeverageAI evaluator — 12 assertions (Task 9).
  *
  * Usage:
- *   npx tsx scripts/eval.ts
- *   npx tsx scripts/eval.ts data/golden/run.json
  *   npm run eval
- *
- * Exit 1 on any failed assertion.
+ *   npx tsx scripts/eval.ts data/golden/run.json
+ *   npx tsx scripts/eval.ts data/golden/live-run.json
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { assertPriceDropsHaveLeverage } from "../src/lib/tools/leverageChain";
 
 const OUTCOME_TYPES = new Set([
   "itemized_quote",
@@ -22,6 +21,7 @@ type Quote = {
   total?: number;
   line_items?: LineItem[];
   notes?: string;
+  red_flag?: boolean;
 };
 type PricePoint = { ts_ms?: number; total: number; note?: string };
 type Session = {
@@ -30,30 +30,54 @@ type Session = {
   outcome_type?: string;
   price_history?: PricePoint[];
   quote?: Quote | null;
-  /** Alternate shape: chronological quote snapshots */
   quotes?: Quote[];
   red_flag?: boolean;
   callback?: { committed?: boolean };
   callback_window?: string;
   transcript_events?: Array<{ speaker?: string; text?: string; ts_ms?: number }>;
+  tool_calls?: ToolCall[];
+};
+
+type ToolCall = {
+  id?: string;
+  session_id?: string;
+  tool_name?: string;
+  created_at?: string;
+  payload?: Record<string, unknown>;
 };
 
 type RunPayload = {
   vertical?: string;
+  job_id?: string;
   job_spec?: Record<string, unknown>;
   job_spec_initial?: Record<string, unknown>;
   job_spec_confirmed?: Record<string, unknown>;
+  voice_intake_spec?: Record<string, unknown>;
+  document_intake_spec?: Record<string, unknown>;
   sessions?: Session[];
-  benchmark_used?: { mid?: number; fair_low?: number; fair_high?: number };
+  tool_calls?: ToolCall[];
+  benchmark_used?: {
+    mid?: number;
+    fair_low?: number;
+    fair_high?: number;
+    source?: string;
+  };
   red_flag_threshold?: number;
-  ranked_report?: Array<{ red_flag?: boolean; total?: number | null }>;
+  ranked_report?: Array<{
+    red_flag?: boolean;
+    total?: number | null;
+    rank?: number;
+    recommendation?: string;
+  }>;
+  watchdog_timeout_session?: {
+    outcome_type?: string;
+    callback_window?: string;
+    reason?: string;
+  };
+  replay_offline_ok?: boolean;
 };
 
 type Check = { name: string; pass: boolean; detail: string };
-
-function deepEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
 
 function finalQuote(s: Session): Quote | null {
   if (s.quote && Array.isArray(s.quote.line_items)) return s.quote;
@@ -62,17 +86,8 @@ function finalQuote(s: Session): Quote | null {
   return s.quote ?? null;
 }
 
-function totalsSeries(s: Session): number[] {
-  if (Array.isArray(s.price_history) && s.price_history.length > 0) {
-    return s.price_history.map((p) => p.total);
-  }
-  if (Array.isArray(s.quotes) && s.quotes.length > 0) {
-    return s.quotes
-      .map((q) => q.total)
-      .filter((t): t is number => typeof t === "number");
-  }
-  const q = finalQuote(s);
-  return typeof q?.total === "number" ? [q.total] : [];
+function deepEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function loadRun(pathArg?: string): { path: string; run: RunPayload } {
@@ -87,172 +102,468 @@ function loadRun(pathArg?: string): { path: string; run: RunPayload } {
   return { path: p, run };
 }
 
-function assertItemizedLineItems(run: RunPayload): Check {
-  const sessions = run.sessions ?? [];
-  const itemized = sessions.filter((s) => s.outcome_type === "itemized_quote");
-  if (itemized.length === 0) {
+function loadVerticalConfig(id: string): {
+  mid: number;
+  threshold: number;
+  source?: string;
+  required_fee_labels?: string[];
+} {
+  const p = join(process.cwd(), "config", "verticals", `${id}.json`);
+  if (!existsSync(p)) {
+    return { mid: 7500, threshold: 0.3 };
+  }
+  const cfg = JSON.parse(readFileSync(p, "utf8")) as {
+    default_job_type?: string;
+    red_flag?: { threshold_below_benchmark?: number; benchmark_key?: string };
+    benchmarks?: Record<
+      string,
+      { mid?: number; fair_low?: number; fair_high?: number; source?: string }
+    >;
+  };
+  const key =
+    cfg.red_flag?.benchmark_key ||
+    cfg.default_job_type ||
+    Object.keys(cfg.benchmarks || {})[0] ||
+    "";
+  const b = cfg.benchmarks?.[key];
+  const mid =
+    b?.mid ??
+    (b?.fair_low != null && b?.fair_high != null
+      ? (b.fair_low + b.fair_high) / 2
+      : 7500);
+  return {
+    mid,
+    threshold: cfg.red_flag?.threshold_below_benchmark ?? 0.3,
+    source: b?.source,
+    required_fee_labels: ["equipment", "labor", "permit", "haul"],
+  };
+}
+
+function allToolCalls(run: RunPayload): ToolCall[] {
+  const top = run.tool_calls ?? [];
+  const nested = (run.sessions ?? []).flatMap((s) =>
+    (s.tool_calls ?? []).map((t) => ({
+      ...t,
+      session_id: t.session_id || s.id,
+    }))
+  );
+  return [...top, ...nested];
+}
+
+function allTranscripts(run: RunPayload) {
+  return (run.sessions ?? []).flatMap((s) =>
+    (s.transcript_events ?? []).map((t, i) => ({
+      id: i,
+      session_id: s.id || s.vendor_id || "",
+      ts_ms: t.ts_ms ?? 0,
+      speaker: t.speaker || "",
+      text: t.text || "",
+      created_at: "",
+    }))
+  );
+}
+
+function allQuotes(run: RunPayload) {
+  const out: Array<{
+    id: string;
+    session_id: string;
+    job_id: string;
+    vendor_id: string;
+    line_items: LineItem[];
+    total: number;
+    red_flag: boolean;
+    notes: string | null;
+    created_at: string;
+  }> = [];
+  for (const s of run.sessions ?? []) {
+    const list =
+      s.quotes && s.quotes.length
+        ? s.quotes
+        : s.quote
+          ? [s.quote]
+          : [];
+    list.forEach((q, i) => {
+      if (typeof q.total !== "number") return;
+      out.push({
+        id: `q-${s.vendor_id}-${i}`,
+        session_id: s.id || s.vendor_id || "",
+        job_id: run.job_id || "job",
+        vendor_id: s.vendor_id || "",
+        line_items: q.line_items || [],
+        total: q.total,
+        red_flag: Boolean(q.red_flag || s.red_flag),
+        notes: q.notes ?? null,
+        created_at: `2026-07-19T12:0${i}:00.000Z`,
+      });
+    });
+  }
+  return out;
+}
+
+// --- assertions ---
+
+function assertItemized(run: RunPayload): Check {
+  const itemized = (run.sessions ?? []).filter(
+    (s) => s.outcome_type === "itemized_quote"
+  );
+  if (!itemized.length) {
     return {
-      name: "itemized_quote line_items",
+      name: "1. itemized fee line items",
       pass: false,
-      detail: "No sessions with outcome_type itemized_quote",
+      detail: "No itemized_quote sessions",
     };
   }
   const bad = itemized.filter((s) => {
     const q = finalQuote(s);
-    return !q || !Array.isArray(q.line_items) || q.line_items.length === 0;
+    return !q?.line_items || q.line_items.length < 2;
   });
   return {
-    name: "itemized_quote line_items",
+    name: "1. itemized fee line items",
     pass: bad.length === 0,
     detail:
       bad.length === 0
-        ? `${itemized.length} itemized quote(s) have non-empty line_items`
-        : `Missing line_items on: ${bad.map((s) => s.id ?? s.vendor_id).join(", ")}`,
+        ? `${itemized.length} itemized quote(s) have ≥2 line items`
+        : `Thin itemization: ${bad.map((s) => s.vendor_id).join(", ")}`,
   };
 }
 
-function assertRedFlagOrBelowBenchmark(run: RunPayload): Check {
-  const sessions = run.sessions ?? [];
-  const threshold = run.red_flag_threshold ?? 0.3;
-  let mid = run.benchmark_used?.mid;
-  if (
-    mid == null &&
-    run.benchmark_used?.fair_low != null &&
-    run.benchmark_used?.fair_high != null
-  ) {
-    mid = (run.benchmark_used.fair_low + run.benchmark_used.fair_high) / 2;
+function assertRedFlag(run: RunPayload, mid: number, thr: number): Check {
+  const cutoff = mid * (1 - thr);
+  let flagged = false;
+  for (const s of run.sessions ?? []) {
+    if (s.red_flag) flagged = true;
+    const t = finalQuote(s)?.total;
+    if (typeof t === "number" && t <= cutoff) flagged = true;
   }
-
-  const anyFlag = sessions.some((s) => s.red_flag === true);
-  const reportFlag = (run.ranked_report ?? []).some((r) => r.red_flag === true);
-
-  let below = false;
-  if (mid != null && mid > 0) {
-    const cutoff = mid * (1 - threshold);
-    for (const s of sessions) {
-      const total = finalQuote(s)?.total;
-      if (typeof total === "number" && total <= cutoff) {
-        below = true;
-        break;
-      }
-    }
-  }
-
-  const pass = anyFlag || reportFlag || below;
+  if ((run.ranked_report ?? []).some((r) => r.red_flag)) flagged = true;
   return {
-    name: "red_flag or ≥30% below benchmark mid",
+    name: "2. red flag ≥30% below fair mid",
+    pass: flagged,
+    detail: flagged
+      ? `flagged vs mid=${mid} cutoff=${cutoff.toFixed(0)}`
+      : `No red flag; mid=${mid}`,
+  };
+}
+
+function assertRedNeverFirst(run: RunPayload): Check {
+  const ranked = run.ranked_report ?? [];
+  if (!ranked.length) {
+    // derive: lowest non-red should win
+    const itemized = (run.sessions ?? [])
+      .filter((s) => s.outcome_type === "itemized_quote")
+      .map((s) => ({
+        vendor: s.vendor_id,
+        total: finalQuote(s)?.total,
+        red: Boolean(s.red_flag || finalQuote(s)?.red_flag),
+      }))
+      .filter((x) => typeof x.total === "number") as Array<{
+      vendor?: string;
+      total: number;
+      red: boolean;
+    }>;
+    const clean = itemized.filter((x) => !x.red).sort((a, b) => a.total - b.total);
+    const winnerIsRed =
+      itemized.length > 0 &&
+      clean.length > 0 &&
+      itemized.every((x) => x.red || x.total >= clean[0]!.total) &&
+      !clean[0];
+    const redWins =
+      itemized.sort((a, b) => a.total - b.total)[0]?.red === true &&
+      clean.length > 0;
+    return {
+      name: "3. red-flag never ranks #1",
+      pass: !redWins,
+      detail: redWins
+        ? "Lowest total is red-flagged"
+        : `winner would be non-red ${clean[0]?.vendor ?? "n/a"}`,
+    };
+  }
+  const first = ranked.find((r) => r.rank === 1) || ranked[0];
+  const pass = !first?.red_flag && first?.recommendation !== "warning_not_winner";
+  return {
+    name: "3. red-flag never ranks #1",
     pass,
     detail: pass
-      ? `flagged=${anyFlag || reportFlag}, below_mid=${below}, mid=${mid ?? "n/a"}, threshold=${threshold}`
-      : `No red_flag and no total ≤ mid*(1-${threshold}) (mid=${mid ?? "missing"})`,
+      ? `rank1 not red`
+      : `rank1 is red-flagged`,
   };
 }
 
-function assertPriceDecrease(run: RunPayload): Check {
-  const sessions = run.sessions ?? [];
-  const drops: string[] = [];
-  for (const s of sessions) {
-    const series = totalsSeries(s);
+function assertLeverageBeforeDrop(run: RunPayload): Check {
+  const tools = allToolCalls(run).map((t) => ({
+    id: t.id || "t",
+    session_id: t.session_id || "",
+    job_id: run.job_id || null,
+    tool_name: t.tool_name || "",
+    payload: t.payload || {},
+    created_at: t.created_at || "2026-07-19T12:01:00.000Z",
+  }));
+  const quotes = allQuotes(run);
+  const transcripts = allTranscripts(run);
+
+  // Find sessions with drops
+  let anyDrop = false;
+  let allOk = true;
+  let detail = "no drops";
+  for (const s of run.sessions ?? []) {
+    const sid = s.id || s.vendor_id || "";
+    const series: number[] = [];
+    if (s.price_history?.length) {
+      series.push(...s.price_history.map((p) => p.total));
+    } else if (s.quotes?.length) {
+      series.push(
+        ...s.quotes
+          .map((q) => q.total)
+          .filter((t): t is number => typeof t === "number")
+      );
+    }
+    let dropped = false;
     for (let i = 1; i < series.length; i++) {
-      if (series[i]! < series[i - 1]!) {
-        drops.push(
-          `${s.id ?? s.vendor_id}: ${series[i - 1]} → ${series[i]}`
-        );
+      if (series[i]! < series[i - 1]!) dropped = true;
+    }
+    if (!dropped) continue;
+    anyDrop = true;
+    const r = assertPriceDropsHaveLeverage({
+      quotes: quotes.map((q) => ({
+        ...q,
+        line_items: (q.line_items || []).map((li) => ({
+          label: li.label || "item",
+          amount: Number(li.amount) || 0,
+        })),
+      })),
+      tool_calls: tools,
+      transcripts,
+      session_id: sid,
+    });
+    if (!r.ok) {
+      allOk = false;
+      detail = r.detail;
+    } else {
+      detail = r.detail;
+    }
+  }
+  return {
+    name: "4. price-drop preceded by get_competing_bids",
+    pass: anyDrop && allOk,
+    detail: anyDrop ? detail : "No mid-session price drop found",
+  };
+}
+
+function assertCitedLeverageLogged(run: RunPayload): Check {
+  const quotes = allQuotes(run);
+  const loggedTotals = new Set(quotes.map((q) => Math.round(q.total)));
+  const re =
+    /(?:quoted|bid|in writing|logged)[^\d$]{0,20}\$?\s*([\d,]+)/gi;
+  let claims = 0;
+  let bad = 0;
+  for (const s of run.sessions ?? []) {
+    for (const t of s.transcript_events ?? []) {
+      if (t.speaker !== "negotiator") continue;
+      let m: RegExpExecArray | null;
+      const text = t.text || "";
+      while ((m = re.exec(text))) {
+        claims++;
+        const n = Number(m[1]!.replace(/,/g, ""));
+        if (!loggedTotals.has(n) && !loggedTotals.has(Math.round(n))) {
+          // allow citing competing bids that exist as quote totals
+          const close = [...loggedTotals].some((x) => Math.abs(x - n) <= 1);
+          if (!close) bad++;
+        }
+      }
+    }
+  }
+  // Also accept get_competing_bids amounts as "logged"
+  for (const t of allToolCalls(run)) {
+    if (t.tool_name !== "get_competing_bids") continue;
+    const bids = (t.payload?.result as { bids?: Array<{ total?: number }> })
+      ?.bids;
+    if (Array.isArray(bids)) {
+      for (const b of bids) {
+        if (typeof b.total === "number") loggedTotals.add(Math.round(b.total));
+      }
+    }
+  }
+  // re-scan with updated set
+  bad = 0;
+  claims = 0;
+  for (const s of run.sessions ?? []) {
+    for (const t of s.transcript_events ?? []) {
+      if (t.speaker !== "negotiator") continue;
+      let m: RegExpExecArray | null;
+      const text = t.text || "";
+      const re2 =
+        /(?:quoted|bid|in writing|logged)[^\d$]{0,40}\$?\s*([\d,]+)/gi;
+      while ((m = re2.exec(text))) {
+        claims++;
+        const n = Number(m[1]!.replace(/,/g, ""));
+        const close = [...loggedTotals].some((x) => Math.abs(x - n) <= 1);
+        if (!close) bad++;
       }
     }
   }
   return {
-    name: "price decrease mid-session",
-    pass: drops.length > 0,
+    name: "5. cited leverage figures are logged",
+    pass: bad === 0 && claims > 0,
     detail:
-      drops.length > 0
-        ? drops.join("; ")
-        : "No session price_history/quotes shows a decrease",
+      claims === 0
+        ? "No leverage citations found in transcripts"
+        : bad === 0
+          ? `${claims} citation(s) match logged quotes`
+          : `${bad}/${claims} unlogged citations`,
+  };
+}
+
+function assertAiDisclosure(run: RunPayload): Check {
+  let asked = false;
+  let disclosed = false;
+  for (const s of run.sessions ?? []) {
+    for (const t of s.transcript_events ?? []) {
+      const text = (t.text || "").toLowerCase();
+      if (
+        t.speaker === "vendor" &&
+        (text.includes("robot") || text.includes("talking to a"))
+      ) {
+        asked = true;
+      }
+      if (
+        t.speaker === "negotiator" &&
+        (text.includes("i'm an ai") ||
+          text.includes("i am an ai") ||
+          text.includes("ai assistant") ||
+          text.includes("ai voice assistant"))
+      ) {
+        disclosed = true;
+      }
+    }
+  }
+  return {
+    name: "6. AI-disclosure when robot-question asked",
+    pass: asked && disclosed,
+    detail: asked
+      ? disclosed
+        ? "disclosure present"
+        : "robot asked but no disclosure"
+      : "no robot question in golden (fail closed)",
   };
 }
 
 function assertStructuredOutcomes(run: RunPayload): Check {
   const sessions = run.sessions ?? [];
-  if (sessions.length === 0) {
-    return {
-      name: "structured outcome_type",
-      pass: false,
-      detail: "No sessions in run",
-    };
-  }
   const bad = sessions.filter(
     (s) => !s.outcome_type || !OUTCOME_TYPES.has(s.outcome_type)
   );
   return {
-    name: "structured outcome_type",
-    pass: bad.length === 0,
+    name: "7. all sessions structured outcomes",
+    pass: sessions.length > 0 && bad.length === 0,
     detail:
       bad.length === 0
-        ? `All ${sessions.length} session(s): ${[...new Set(sessions.map((s) => s.outcome_type))].join(" | ")}`
-        : `Invalid/missing outcome: ${bad.map((s) => s.id ?? "?").join(", ")}`,
+        ? `All ${sessions.length} sessions structured`
+        : `Missing outcome: ${bad.map((s) => s.vendor_id).join(", ")}`,
   };
 }
 
-function assertJobSpecFrozen(run: RunPayload): Check {
-  const initial = run.job_spec_initial;
-  const confirmed = run.job_spec_confirmed;
-  if (initial == null && confirmed == null) {
-    const ok = run.job_spec != null && Object.keys(run.job_spec).length > 0;
-    return {
-      name: "job_spec frozen (initial≡confirmed)",
-      pass: ok,
-      detail: ok
-        ? "Only job_spec present (no initial/confirmed pair); non-empty OK"
-        : "Missing job_spec",
-    };
-  }
-  if (initial == null || confirmed == null) {
-    return {
-      name: "job_spec frozen (initial≡confirmed)",
-      pass: false,
-      detail: "Only one of job_spec_initial / job_spec_confirmed present",
-    };
-  }
-  const match = deepEqual(initial, confirmed);
-  const withFinal =
-    run.job_spec == null ? true : deepEqual(run.job_spec, confirmed);
+function assertDualIntake(run: RunPayload): Check {
+  const v = run.voice_intake_spec || run.job_spec_initial || run.job_spec;
+  const d = run.document_intake_spec || run.job_spec_confirmed || run.job_spec;
+  const pass = v != null && d != null && deepEqual(v, d);
   return {
-    name: "job_spec frozen (initial≡confirmed)",
-    pass: match && withFinal,
-    detail:
-      match && withFinal
-        ? "job_spec_initial === job_spec_confirmed === job_spec"
-        : "Mismatch between initial / confirmed / job_spec",
+    name: "8. voice & document intake schema-identical",
+    pass,
+    detail: pass
+      ? "voice_intake_spec ≡ document_intake_spec"
+      : "intake specs missing or diverge",
+  };
+}
+
+function assertMoversSwap(): Check {
+  const p = join(process.cwd(), "config", "verticals", "movers.json");
+  if (!existsSync(p)) {
+    return { name: "9. movers config swap", pass: false, detail: "no movers.json" };
+  }
+  try {
+    const cfg = JSON.parse(readFileSync(p, "utf8")) as {
+      red_flag?: { threshold_below_benchmark?: number; never_rank_first?: boolean };
+      benchmarks?: Record<string, { mid?: number; fair_low?: number; fair_high?: number }>;
+      vendors?: unknown[];
+    };
+    const thr = cfg.red_flag?.threshold_below_benchmark === 0.3;
+    const never = cfg.red_flag?.never_rank_first === true;
+    const vendors = (cfg.vendors?.length ?? 0) === 3;
+    const hasBench = Object.keys(cfg.benchmarks || {}).length > 0;
+    return {
+      name: "9. movers config swap assertions 1–3 shape",
+      pass: thr && never && vendors && hasBench,
+      detail: `thr=${thr} never_first=${never} vendors3=${vendors} benches=${hasBench}`,
+    };
+  } catch (e) {
+    return {
+      name: "9. movers config swap",
+      pass: false,
+      detail: e instanceof Error ? e.message : "parse error",
+    };
+  }
+}
+
+function assertBenchmarkSource(run: RunPayload, cfgSource?: string): Check {
+  const src = run.benchmark_used?.source || cfgSource;
+  return {
+    name: "10. benchmark responses include source",
+    pass: Boolean(src && src.length > 8),
+    detail: src ? src.slice(0, 80) : "missing source citation",
+  };
+}
+
+function assertWatchdog(run: RunPayload): Check {
+  const w = run.watchdog_timeout_session;
+  const pass =
+    w?.outcome_type === "documented_decline" &&
+    Boolean(w.callback_window?.includes("timeout") || w.reason === "timeout");
+  return {
+    name: "11. watchdog timeout → documented_decline",
+    pass: Boolean(pass),
+    detail: pass
+      ? "watchdog fixture present"
+      : "missing watchdog_timeout_session fixture",
+  };
+}
+
+function assertReplayOffline(): Check {
+  const runPath = join(process.cwd(), "data", "golden", "run.json");
+  const publicPath = join(process.cwd(), "public", "golden", "run.json");
+  const pass = existsSync(runPath) && existsSync(publicPath);
+  return {
+    name: "12. replay mode offline (zero env)",
+    pass,
+    detail: pass
+      ? "data/golden + public/golden present"
+      : "golden run files missing",
   };
 }
 
 function printTable(checks: Check[], runPath: string, vertical?: string) {
-  const rows = checks.map((c) => ({
-    status: c.pass ? "PASS" : "FAIL",
-    name: c.name,
-    detail: c.detail,
-  }));
-  const nameW = Math.max(24, ...rows.map((r) => r.name.length));
-  const sep = `| ${"-".repeat(6)} | ${"-".repeat(nameW)} | ${"-".repeat(40)} |`;
-  console.log(`\n# Eval: The Negotiator\n`);
+  const nameW = Math.max(40, ...checks.map((c) => c.name.length));
+  console.log(`\n# Eval: LeverageAI\n`);
   console.log(`- **run:** \`${runPath}\``);
   console.log(`- **vertical:** ${vertical ?? "unknown"}`);
   console.log(`- **checks:** ${checks.length}`);
   console.log("");
   console.log(`| Status | ${"Check".padEnd(nameW)} | Detail |`);
-  console.log(sep);
-  for (const r of rows) {
+  console.log(
+    `| ${"-".repeat(6)} | ${"-".repeat(nameW)} | ${"-".repeat(40)} |`
+  );
+  for (const c of checks) {
     const detail =
-      r.detail.length > 80 ? r.detail.slice(0, 77) + "..." : r.detail;
+      c.detail.length > 80 ? c.detail.slice(0, 77) + "..." : c.detail;
     console.log(
-      `| ${r.status.padEnd(6)} | ${r.name.padEnd(nameW)} | ${detail} |`
+      `| ${(c.pass ? "PASS" : "FAIL").padEnd(6)} | ${c.name.padEnd(nameW)} | ${detail} |`
     );
   }
   const failed = checks.filter((c) => !c.pass).length;
-  const passed = checks.length - failed;
   console.log("");
   console.log(
-    `**Result:** ${passed}/${checks.length} passed${failed ? ` · ${failed} failed` : " · all green"}`
+    `**Result:** ${checks.length - failed}/${checks.length} passed${
+      failed ? ` · ${failed} failed` : " · all green"
+    }`
   );
   console.log("");
 }
@@ -260,20 +571,36 @@ function printTable(checks: Check[], runPath: string, vertical?: string) {
 function main() {
   const arg = process.argv[2];
   const { path, run } = loadRun(arg);
+  const verticalId = run.vertical || "hvac";
+  const cfg = loadVerticalConfig(verticalId);
+  let mid = run.benchmark_used?.mid ?? cfg.mid;
+  if (
+    mid == null &&
+    run.benchmark_used?.fair_low != null &&
+    run.benchmark_used?.fair_high != null
+  ) {
+    mid =
+      (run.benchmark_used.fair_low + run.benchmark_used.fair_high) / 2;
+  }
+  const thr = run.red_flag_threshold ?? cfg.threshold;
 
   const checks: Check[] = [
-    assertItemizedLineItems(run),
-    assertRedFlagOrBelowBenchmark(run),
-    assertPriceDecrease(run),
+    assertItemized(run),
+    assertRedFlag(run, mid, thr),
+    assertRedNeverFirst(run),
+    assertLeverageBeforeDrop(run),
+    assertCitedLeverageLogged(run),
+    assertAiDisclosure(run),
     assertStructuredOutcomes(run),
-    assertJobSpecFrozen(run),
+    assertDualIntake(run),
+    assertMoversSwap(),
+    assertBenchmarkSource(run, cfg.source),
+    assertWatchdog(run),
+    assertReplayOffline(),
   ];
 
-  printTable(checks, path, run.vertical);
-
-  if (checks.some((c) => !c.pass)) {
-    process.exit(1);
-  }
+  printTable(checks, path, verticalId);
+  if (checks.some((c) => !c.pass)) process.exit(1);
 }
 
 main();

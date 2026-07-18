@@ -1,7 +1,6 @@
 /**
- * Shared domain types for The Negotiator backend.
+ * Shared domain types for LeverageAI / The Negotiator backend.
  * Vertical-specific values come from /config/verticals/*.json only.
- * Prefer VerticalConfig / JobSpec from @/lib/config/loadVertical (config/schema) when possible.
  */
 
 export type OutcomeType =
@@ -9,13 +8,23 @@ export type OutcomeType =
   | "callback_commitment"
   | "documented_decline";
 
-export type JobStatus = "draft" | "confirmed" | "running" | "complete";
+export type JobStatus =
+  | "draft"
+  | "confirmed"
+  | "discovering"
+  | "running"
+  | "complete";
+
 export type SessionStatus =
   | "pending"
   | "connecting"
   | "live"
   | "closed"
-  | "error";
+  | "error"
+  | "dialing"
+  | "negotiating"
+  | "done"
+  | "declined";
 
 export type Speaker = "negotiator" | "vendor" | "system";
 
@@ -27,9 +36,7 @@ export interface LineItem {
 
 /** Open job_spec — fields differ by vertical (see job_spec_schema in config). */
 export type JobSpec = Record<string, unknown> & {
-  /** Preferred benchmark key */
   job_type?: string;
-  /** Alias used in vertical demo_defaults */
   job_kind?: string;
 };
 
@@ -37,6 +44,8 @@ export interface Job {
   id: string;
   vertical: string;
   job_spec: JobSpec;
+  /** Immutable snapshot after confirm */
+  frozen_job_spec?: JobSpec | null;
   status: JobStatus;
   confirmed: boolean;
   created_at: string;
@@ -51,8 +60,13 @@ export interface Session {
   outcome_type: OutcomeType | null;
   current_total: number | null;
   callback_window: string | null;
+  negotiator_conversation_id?: string | null;
+  counter_conversation_id?: string | null;
+  audio_url?: string | null;
+  recording_note?: string | null;
   created_at: string;
   updated_at: string;
+  last_event_at?: string | null;
 }
 
 export interface Quote {
@@ -76,6 +90,25 @@ export interface TranscriptEvent {
   created_at: string;
 }
 
+export interface ToolCallRecord {
+  id: string;
+  session_id: string;
+  job_id?: string | null;
+  tool_name: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface LeverageChainStep {
+  t_ms: number;
+  kind: "get_competing_bids" | "transcript_cite" | "log_quote_drop";
+  label: string;
+  amount?: number;
+  quote_id?: string;
+  vendor_id?: string;
+  transcript_excerpt?: string;
+}
+
 export interface BenchmarkRange {
   low: number;
   mid: number;
@@ -85,6 +118,8 @@ export interface BenchmarkRange {
   fair_low?: number;
   fair_high?: number;
   currency?: string;
+  source?: string;
+  retrieved?: string;
 }
 
 export interface VendorConfig {
@@ -103,6 +138,7 @@ export interface RankedQuote extends Quote {
   rank: number | null;
   vendor_name?: string;
   is_winner: boolean;
+  leverage_chain?: LeverageChainStep[];
 }
 
 export interface JobState {
@@ -111,6 +147,7 @@ export interface JobState {
   quotes: Quote[];
   transcripts: TranscriptEvent[];
   ranked: RankedQuote[];
+  tool_calls?: ToolCallRecord[];
 }
 
 /** Resolve benchmark job-type key from a job_spec + vertical defaults */

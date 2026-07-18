@@ -10,9 +10,16 @@ export async function GET(req: NextRequest) {
   const vertical = (
     req.nextUrl.searchParams.get("vertical") || "hvac"
   ).toLowerCase();
+  const live =
+    req.nextUrl.searchParams.get("live") === "1" ||
+    req.nextUrl.searchParams.get("mode") === "live";
 
-  const candidates =
-    vertical === "movers"
+  const candidates = live
+    ? [
+        path.join(process.cwd(), "data", "golden", "live-run.json"),
+        path.join(process.cwd(), "data", "golden", "run.json"),
+      ]
+    : vertical === "movers"
       ? [
           path.join(process.cwd(), "data", "golden", "run-movers.json"),
           path.join(process.cwd(), "data", "golden", "run.json"),

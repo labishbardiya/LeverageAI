@@ -25,6 +25,18 @@ export type BenchmarkEntry = {
   mid?: number;
   high?: number;
   currency?: string;
+  source?: string;
+  retrieved?: string;
+};
+
+export type LeverageChainStep = {
+  t_ms: number;
+  kind: string;
+  label: string;
+  amount?: number;
+  quote_id?: string;
+  vendor_id?: string;
+  transcript_excerpt?: string;
 };
 
 export type VerticalConfig = {
@@ -123,6 +135,7 @@ export type RankedDeal = {
   red_flag: boolean;
   red_flag_pct?: number;
   why: string;
+  leverage_chain?: LeverageChainStep[];
 };
 
 export type UiPhase = "draft" | "confirmed" | "calling" | "complete";

@@ -1,8 +1,5 @@
 /**
  * In-memory store fallback when DATABASE_URL is missing.
- * Enables local demo without Neon. Same interface as Postgres store.
- *
- * Data lives on globalThis so Next.js HMR / multi-module imports share one store.
  */
 import { randomUUID } from "crypto";
 import type {
@@ -11,12 +8,14 @@ import type {
   Quote,
   Session,
   TranscriptEvent,
+  ToolCallRecord,
 } from "@/lib/types";
 import type {
   AppendTranscriptInput,
   CreateJobInput,
   CreateQuoteInput,
   CreateSessionInput,
+  CreateToolCallInput,
   DataStore,
 } from "./store";
 
@@ -25,6 +24,7 @@ interface MemoryTables {
   sessions: Map<string, Session>;
   quotes: Map<string, Quote>;
   transcripts: TranscriptEvent[];
+  toolCalls: ToolCallRecord[];
   transcriptSeq: number;
 }
 
@@ -40,9 +40,11 @@ function getTables(): MemoryTables {
       sessions: new Map(),
       quotes: new Map(),
       transcripts: [],
+      toolCalls: [],
       transcriptSeq: 0,
     };
   }
+  if (!g.__negotiatorMemory.toolCalls) g.__negotiatorMemory.toolCalls = [];
   return g.__negotiatorMemory;
 }
 
@@ -54,6 +56,7 @@ export class MemoryStore implements DataStore {
       id: randomUUID(),
       vertical: input.vertical,
       job_spec: input.job_spec,
+      frozen_job_spec: null,
       status: input.status ?? "draft",
       confirmed: false,
       created_at: nowIso(),
@@ -64,41 +67,77 @@ export class MemoryStore implements DataStore {
 
   async getJob(id: string): Promise<Job | null> {
     const job = getTables().jobs.get(id);
-    return job ? { ...job, job_spec: { ...job.job_spec } } : null;
+    return job
+      ? {
+          ...job,
+          job_spec: { ...job.job_spec },
+          frozen_job_spec: job.frozen_job_spec
+            ? { ...job.frozen_job_spec }
+            : null,
+        }
+      : null;
   }
 
   async updateJob(
     id: string,
-    patch: Partial<Pick<Job, "job_spec" | "status" | "confirmed">>
+    patch: Partial<
+      Pick<Job, "job_spec" | "status" | "confirmed" | "frozen_job_spec">
+    >
   ): Promise<Job | null> {
     const job = getTables().jobs.get(id);
     if (!job) return null;
     if (job.confirmed && patch.job_spec) {
-      // confirmed jobs: job_spec immutable
       throw new Error("Job is confirmed; job_spec is immutable");
     }
     const next: Job = {
       ...job,
       ...patch,
-      job_spec: patch.job_spec
-        ? { ...patch.job_spec }
-        : { ...job.job_spec },
+      job_spec: patch.job_spec ? { ...patch.job_spec } : { ...job.job_spec },
+      frozen_job_spec:
+        patch.frozen_job_spec !== undefined
+          ? patch.frozen_job_spec
+            ? { ...patch.frozen_job_spec }
+            : null
+          : job.frozen_job_spec
+            ? { ...job.frozen_job_spec }
+            : null,
     };
     getTables().jobs.set(id, next);
-    return { ...next, job_spec: { ...next.job_spec } };
+    return {
+      ...next,
+      job_spec: { ...next.job_spec },
+      frozen_job_spec: next.frozen_job_spec
+        ? { ...next.frozen_job_spec }
+        : null,
+    };
   }
 
   async confirmJob(id: string): Promise<Job | null> {
     const job = getTables().jobs.get(id);
     if (!job) return null;
-    if (job.confirmed) return { ...job, job_spec: { ...job.job_spec } };
+    if (job.confirmed) {
+      return {
+        ...job,
+        job_spec: { ...job.job_spec },
+        frozen_job_spec: job.frozen_job_spec
+          ? { ...job.frozen_job_spec }
+          : { ...job.job_spec },
+      };
+    }
+    const frozen = { ...job.job_spec };
     const next: Job = {
       ...job,
       confirmed: true,
       status: "confirmed",
+      frozen_job_spec: frozen,
+      job_spec: frozen,
     };
     getTables().jobs.set(id, next);
-    return { ...next, job_spec: { ...next.job_spec } };
+    return {
+      ...next,
+      job_spec: { ...next.job_spec },
+      frozen_job_spec: { ...frozen },
+    };
   }
 
   async createSession(input: CreateSessionInput): Promise<Session> {
@@ -112,6 +151,11 @@ export class MemoryStore implements DataStore {
       outcome_type: null,
       current_total: null,
       callback_window: null,
+      negotiator_conversation_id: null,
+      counter_conversation_id: null,
+      audio_url: null,
+      recording_note: null,
+      last_event_at: ts,
       created_at: ts,
       updated_at: ts,
     };
@@ -136,7 +180,15 @@ export class MemoryStore implements DataStore {
     patch: Partial<
       Pick<
         Session,
-        "status" | "outcome_type" | "current_total" | "callback_window"
+        | "status"
+        | "outcome_type"
+        | "current_total"
+        | "callback_window"
+        | "negotiator_conversation_id"
+        | "counter_conversation_id"
+        | "audio_url"
+        | "recording_note"
+        | "last_event_at"
       >
     >
   ): Promise<Session | null> {
@@ -165,12 +217,12 @@ export class MemoryStore implements DataStore {
     };
     getTables().quotes.set(quote.id, quote);
 
-    // Keep session current_total in sync
     const session = getTables().sessions.get(input.session_id);
     if (session) {
       getTables().sessions.set(input.session_id, {
         ...session,
         current_total: input.total,
+        last_event_at: nowIso(),
         updated_at: nowIso(),
       });
     }
@@ -214,6 +266,14 @@ export class MemoryStore implements DataStore {
       created_at: nowIso(),
     };
     tables.transcripts.push(event);
+    const session = tables.sessions.get(input.session_id);
+    if (session) {
+      tables.sessions.set(input.session_id, {
+        ...session,
+        last_event_at: nowIso(),
+        updated_at: nowIso(),
+      });
+    }
     return { ...event };
   }
 
@@ -251,9 +311,43 @@ export class MemoryStore implements DataStore {
       callback_window: callback_window ?? null,
     });
   }
+
+  async createToolCall(input: CreateToolCallInput): Promise<ToolCallRecord> {
+    const rec: ToolCallRecord = {
+      id: randomUUID(),
+      session_id: input.session_id,
+      job_id: input.job_id ?? null,
+      tool_name: input.tool_name,
+      payload: { ...input.payload },
+      created_at: nowIso(),
+    };
+    getTables().toolCalls.push(rec);
+    const session = getTables().sessions.get(input.session_id);
+    if (session) {
+      getTables().sessions.set(input.session_id, {
+        ...session,
+        last_event_at: nowIso(),
+        updated_at: nowIso(),
+      });
+    }
+    return { ...rec, payload: { ...rec.payload } };
+  }
+
+  async listToolCallsBySession(session_id: string): Promise<ToolCallRecord[]> {
+    return getTables()
+      .toolCalls.filter((t) => t.session_id === session_id)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .map((t) => ({ ...t, payload: { ...t.payload } }));
+  }
+
+  async listToolCallsByJob(job_id: string): Promise<ToolCallRecord[]> {
+    return getTables()
+      .toolCalls.filter((t) => t.job_id === job_id)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .map((t) => ({ ...t, payload: { ...t.payload } }));
+  }
 }
 
-/** Test helper — wipe all in-memory data */
 export function resetMemoryStore(): void {
   const g = globalThis as unknown as { __negotiatorMemory?: MemoryTables };
   g.__negotiatorMemory = {
@@ -261,6 +355,7 @@ export function resetMemoryStore(): void {
     sessions: new Map(),
     quotes: new Map(),
     transcripts: [],
+    toolCalls: [],
     transcriptSeq: 0,
   };
 }

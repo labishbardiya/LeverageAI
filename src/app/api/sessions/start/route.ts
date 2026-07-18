@@ -6,14 +6,24 @@ import {
   toPublicVertical,
 } from "@/lib/config/loadVertical";
 import { publish } from "@/lib/db/events";
+import { isLiveModeEnabled } from "@/lib/elevenlabs/liveMode";
+import { getAgentId } from "@/lib/elevenlabs/env";
+import { runBridgesSequential } from "@/lib/elevenlabs/bridge";
+import type { BridgePairIntent } from "@/lib/elevenlabs/types";
+import { fetchAndStoreRecording } from "@/lib/elevenlabs/recordings";
+
+export const runtime = "nodejs";
 
 const schema = z.object({
   job_id: z.string().uuid(),
+  /** When true and live mode is on, start bridges (default true). */
+  live: z.boolean().optional(),
 });
 
 /**
- * POST /api/sessions/start — for confirmed job, create 3 sessions from config vendors.
- * Response vendors are public-only (pricing_strategy_secret stripped).
+ * POST /api/sessions/start — create 3 sessions from config vendors.
+ * Live mode (all 5 agent IDs + API key): sequential WebSocket bridges.
+ * Otherwise: scaffold only (replay-compatible).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -44,6 +54,7 @@ export async function POST(req: NextRequest) {
         sessions: existing,
         already_started: true,
         job_id: job.id,
+        live: isLiveModeEnabled(),
       });
     }
 
@@ -56,6 +67,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const frozen = job.frozen_job_spec ?? job.job_spec;
+    const jobSpecJson = JSON.stringify(frozen);
 
     const sessions = [];
     for (const vendor of vertical.vendors) {
@@ -76,12 +90,44 @@ export async function POST(req: NextRequest) {
 
     await store.updateJob(job.id, { status: "running" });
 
+    const live = isLiveModeEnabled() && parsed.data.live !== false;
+    let bridge_results: unknown = null;
+
+    if (live) {
+      const intents: BridgePairIntent[] = sessions.map((s) => {
+        const slot = s.vendor_id as "tough" | "stonewaller" | "upseller";
+        return {
+          negotiatorAgentId: getAgentId("negotiator"),
+          counterAgentId: getAgentId(slot),
+          companyKey: slot,
+          jobId: job.id,
+          sessionId: s.id,
+          jobSpecJson,
+        };
+      });
+
+      // Sequential bridges — keep tool logs clean
+      bridge_results = await runBridgesSequential(intents);
+
+      // Best-effort recordings after close
+      for (const s of await store.listSessionsByJob(job.id)) {
+        if (s.negotiator_conversation_id) {
+          await fetchAndStoreRecording(
+            s.id,
+            s.negotiator_conversation_id
+          ).catch(() => null);
+        }
+      }
+    }
+
     const pub = toPublicVertical(vertical);
 
     return NextResponse.json(
       {
         job_id: job.id,
-        sessions,
+        sessions: await store.listSessionsByJob(job.id),
+        live,
+        bridge_results,
         vendors: pub.vendors.map((v) => ({
           id: v.id,
           name: v.name ?? v.displayName,

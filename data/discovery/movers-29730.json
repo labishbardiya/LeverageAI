@@ -1,0 +1,45 @@
+{
+  "vertical": "movers",
+  "zip": "29730",
+  "query": "moving company near 29730",
+  "retrieved": "2026-07",
+  "source": "Google Places API (Text Search) — snapshot for offline demo",
+  "note": "Rock Hill SC (29730) → Charlotte corridor. Phones redacted.",
+  "places": [
+    {
+      "displayName": "Two Men and a Truck of Charlotte",
+      "rating": 4.6,
+      "userRatingCount": 890,
+      "nationalPhoneNumber": "+1 (704) 555-11••",
+      "formattedAddress": "Charlotte / Rock Hill corridor"
+    },
+    {
+      "displayName": "All My Sons Moving & Storage",
+      "rating": 4.1,
+      "userRatingCount": 520,
+      "nationalPhoneNumber": "+1 (704) 555-12••",
+      "formattedAddress": "Charlotte, NC"
+    },
+    {
+      "displayName": "College Hunks Hauling Junk & Moving",
+      "rating": 4.5,
+      "userRatingCount": 340,
+      "nationalPhoneNumber": "+1 (803) 555-13••",
+      "formattedAddress": "Rock Hill, SC"
+    },
+    {
+      "displayName": "Bellhops Moving",
+      "rating": 4.3,
+      "userRatingCount": 210,
+      "nationalPhoneNumber": "+1 (704) 555-14••",
+      "formattedAddress": "Charlotte metro"
+    },
+    {
+      "displayName": "Local Rock Hill Movers Co-op Listing",
+      "rating": 4.0,
+      "userRatingCount": 64,
+      "nationalPhoneNumber": "+1 (803) 555-15••",
+      "formattedAddress": "Rock Hill, SC 29730"
+    }
+  ]
+}

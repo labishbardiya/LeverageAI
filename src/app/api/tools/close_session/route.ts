@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { closeSession } from "@/lib/tools/closeSession";
 import { publish } from "@/lib/db/events";
+import { recordToolCall } from "@/lib/tools/recordToolCall";
 
 /**
  * POST /api/tools/close_session
@@ -9,7 +10,16 @@ import { publish } from "@/lib/db/events";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
+    const b = body as Record<string, unknown>;
     const result = await closeSession(body);
+
+    await recordToolCall({
+      session_id: (b.session_id as string) || undefined,
+      job_id: (b.job_id as string) || undefined,
+      tool_name: "close_session",
+      payload: { request: b, result },
+    });
+
     if (!result.ok) {
       const status = result.code === "SESSION_NOT_FOUND" ? 404 : 400;
       return NextResponse.json(result, { status });

@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { lookupBenchmark } from "@/lib/tools/lookupBenchmark";
+import { recordToolCall } from "@/lib/tools/recordToolCall";
 
 /**
  * POST /api/tools/lookup_benchmark
- * Benchmark ranges from /config/verticals only.
- * Body: { job_id } and/or { vertical, item }
+ * Benchmark ranges from /config/verticals only — includes source citation.
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
+    const b = body as Record<string, unknown>;
     const result = await lookupBenchmark(body);
+
+    await recordToolCall({
+      session_id: (b.session_id as string) || undefined,
+      job_id: (b.job_id as string) || undefined,
+      tool_name: "lookup_benchmark",
+      payload: { request: b, result },
+    });
+
     if (!result.ok) {
       const status = result.code === "JOB_NOT_FOUND" ? 404 : 400;
       return NextResponse.json(result, { status });

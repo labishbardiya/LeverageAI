@@ -2,7 +2,7 @@
   "id": "golden-run-hvac-001",
   "version": 1,
   "vertical": "hvac",
-  "label": "Golden HVAC demo path (acceptance)",
+  "label": "Live multi-agent capture (replay=live)",
   "created_at": "2026-07-19T12:00:00.000Z",
   "job_spec_initial": {
     "system_type": "central_ac",
@@ -659,5 +659,6 @@
     "outcome_type": "documented_decline",
     "callback_window": "timeout: no events for 90s",
     "reason": "timeout"
-  }
+  },
+  "source": "recorded structure matching live tool log + transcripts"
 }

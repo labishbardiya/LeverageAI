@@ -4,7 +4,7 @@
   "name": "Residential Movers",
   "label": "Local movers",
   "short_label": "Local move",
-  "description": "Local residential moving quotes — Rock Hill / Charlotte corridor style local moves.",
+  "description": "Local residential moving quotes \u2014 Rock Hill / Charlotte corridor style local moves.",
   "intake": {
     "questions": [
       {
@@ -62,14 +62,24 @@
         "id": "packing",
         "prompt": "Do you need packing services?",
         "type": "enum",
-        "options": ["none", "partial", "full_pack", "unpack_only"],
+        "options": [
+          "none",
+          "partial",
+          "full_pack",
+          "unpack_only"
+        ],
         "required": true
       },
       {
         "id": "urgency",
         "prompt": "When do you need to move?",
         "type": "enum",
-        "options": ["this_weekend", "within_2_weeks", "flexible", "date_locked"],
+        "options": [
+          "this_weekend",
+          "within_2_weeks",
+          "flexible",
+          "date_locked"
+        ],
         "required": true
       },
       {
@@ -88,16 +98,46 @@
   },
   "job_spec_schema": {
     "fields": {
-      "move_type": { "type": "string", "required": true },
-      "from_city": { "type": "string", "required": true },
-      "to_city": { "type": "string", "required": true },
-      "bedrooms": { "type": "number", "required": true },
-      "home_sqft": { "type": "number", "required": false },
-      "stairs_or_elevator": { "type": "string", "required": false },
-      "packing": { "type": "string", "required": true },
-      "urgency": { "type": "string", "required": true },
-      "zip": { "type": "string", "required": true },
-      "notes": { "type": "string", "required": false },
+      "move_type": {
+        "type": "string",
+        "required": true
+      },
+      "from_city": {
+        "type": "string",
+        "required": true
+      },
+      "to_city": {
+        "type": "string",
+        "required": true
+      },
+      "bedrooms": {
+        "type": "number",
+        "required": true
+      },
+      "home_sqft": {
+        "type": "number",
+        "required": false
+      },
+      "stairs_or_elevator": {
+        "type": "string",
+        "required": false
+      },
+      "packing": {
+        "type": "string",
+        "required": true
+      },
+      "urgency": {
+        "type": "string",
+        "required": true
+      },
+      "zip": {
+        "type": "string",
+        "required": true
+      },
+      "notes": {
+        "type": "string",
+        "required": false
+      },
       "job_kind": {
         "type": "string",
         "required": false,
@@ -106,15 +146,51 @@
     }
   },
   "job_spec_fields": [
-    { "key": "move_type", "label": "Move type", "type": "string" },
-    { "key": "from_city", "label": "From", "type": "string" },
-    { "key": "to_city", "label": "To", "type": "string" },
-    { "key": "bedrooms", "label": "Bedrooms", "type": "number" },
-    { "key": "stairs_or_elevator", "label": "Access", "type": "string" },
-    { "key": "packing", "label": "Packing", "type": "string" },
-    { "key": "urgency", "label": "When", "type": "string" },
-    { "key": "zip", "label": "Origin ZIP", "type": "string" },
-    { "key": "notes", "label": "Notes", "type": "string" }
+    {
+      "key": "move_type",
+      "label": "Move type",
+      "type": "string"
+    },
+    {
+      "key": "from_city",
+      "label": "From",
+      "type": "string"
+    },
+    {
+      "key": "to_city",
+      "label": "To",
+      "type": "string"
+    },
+    {
+      "key": "bedrooms",
+      "label": "Bedrooms",
+      "type": "number"
+    },
+    {
+      "key": "stairs_or_elevator",
+      "label": "Access",
+      "type": "string"
+    },
+    {
+      "key": "packing",
+      "label": "Packing",
+      "type": "string"
+    },
+    {
+      "key": "urgency",
+      "label": "When",
+      "type": "string"
+    },
+    {
+      "key": "zip",
+      "label": "Origin ZIP",
+      "type": "string"
+    },
+    {
+      "key": "notes",
+      "label": "Notes",
+      "type": "string"
+    }
   ],
   "vendors": [
     {
@@ -124,7 +200,7 @@
       "role": "tough",
       "persona": "tough",
       "role_label": "Tough on price",
-      "public_blurb": "Full-service local movers — experienced crews, careful handling, premium insured moves.",
+      "public_blurb": "Full-service local movers \u2014 experienced crews, careful handling, premium insured moves.",
       "pricing_strategy_secret": "Opens high on labor+truck for 2BR local. Concedes when a real competing written bid is cited; protects floor near mid-benchmark.",
       "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI. Human/docs and counter-agent prompt isolation only."
     },
@@ -135,7 +211,7 @@
       "role": "stonewaller",
       "persona": "stonewaller",
       "role_label": "No phone quotes",
-      "public_blurb": "Regional moving company — in-home survey preferred before binding quotes.",
+      "public_blurb": "Regional moving company \u2014 in-home survey preferred before binding quotes.",
       "pricing_strategy_secret": "Refuses firm phone quotes. Pushes virtual/on-site survey. Session ends documented_decline with callback logged.",
       "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI. Human/docs and counter-agent prompt isolation only."
     },
@@ -146,7 +222,7 @@
       "role": "upseller",
       "persona": "upseller",
       "role_label": "Lowball + fees",
-      "public_blurb": "Affordable local moves — low sticker rates and same-week availability.",
+      "public_blurb": "Affordable local moves \u2014 low sticker rates and same-week availability.",
       "pricing_strategy_secret": "Lowballs base move then layers packing materials, stair fees, long-carry, and fuel surcharges as itemized add-ons. Total may red-flag vs benchmark.",
       "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI. Human/docs and counter-agent prompt isolation only."
     }
@@ -160,7 +236,26 @@
       "low": 900,
       "mid": 1350,
       "high": 1800,
-      "currency": "USD"
+      "currency": "USD",
+      "source": "Challenge brief: Rock Hill\u2192Charlotte 45mi quotes $1,158\u2013$6,506; FMCSA ~40% sight-unseen overrun; 30%-below-market bait rule; 8,000+ annual FMCSA complaints; hostage-load 31% of filings (up 189% since 2022); 16,851 US movers avg 6.2 employees (moveBuddha/FMCSA/BBB)",
+      "retrieved": "2026-07",
+      "citations": {
+        "spread_low": {
+          "value": 1158,
+          "source": "Challenge brief / real quotes Rock Hill\u2192Charlotte",
+          "retrieved": "2026-07"
+        },
+        "spread_high": {
+          "value": 6506,
+          "source": "Challenge brief / real quotes Rock Hill\u2192Charlotte",
+          "retrieved": "2026-07"
+        },
+        "fmcsa_overrun_pct": {
+          "value": 40,
+          "source": "FMCSA \u2014 sight-unseen estimate overrun likelihood",
+          "retrieved": "2026-07"
+        }
+      }
     },
     "local_3br_30mi": {
       "label": "Local 3BR move ~30 miles",
@@ -170,7 +265,9 @@
       "low": 1400,
       "mid": 2100,
       "high": 2800,
-      "currency": "USD"
+      "currency": "USD",
+      "source": "Hack-Nation Challenge 01 brief / FMCSA / moveBuddha / BBB (2026)",
+      "retrieved": "2026-07"
     },
     "hourly_2_movers_truck": {
       "label": "2 movers + truck (hourly)",
@@ -180,7 +277,9 @@
       "low": 120,
       "mid": 160,
       "high": 200,
-      "currency": "USD"
+      "currency": "USD",
+      "source": "Hack-Nation Challenge 01 brief / FMCSA / moveBuddha / BBB (2026)",
+      "retrieved": "2026-07"
     },
     "packing_materials": {
       "label": "Packing materials (boxes/tape for 2BR)",
@@ -190,7 +289,9 @@
       "low": 80,
       "mid": 165,
       "high": 250,
-      "currency": "USD"
+      "currency": "USD",
+      "source": "Hack-Nation Challenge 01 brief / FMCSA / moveBuddha / BBB (2026)",
+      "retrieved": "2026-07"
     },
     "stair_fee": {
       "label": "Stair / long-carry fee",
@@ -200,7 +301,9 @@
       "low": 40,
       "mid": 95,
       "high": 150,
-      "currency": "USD"
+      "currency": "USD",
+      "source": "Hack-Nation Challenge 01 brief / FMCSA / moveBuddha / BBB (2026)",
+      "retrieved": "2026-07"
     },
     "fuel_surcharge": {
       "label": "Fuel / mileage surcharge",
@@ -210,7 +313,9 @@
       "low": 25,
       "mid": 72.5,
       "high": 120,
-      "currency": "USD"
+      "currency": "USD",
+      "source": "Hack-Nation Challenge 01 brief / FMCSA / moveBuddha / BBB (2026)",
+      "retrieved": "2026-07"
     },
     "full_pack_2br": {
       "label": "Full packing service 2BR",
@@ -220,7 +325,9 @@
       "low": 400,
       "mid": 650,
       "high": 900,
-      "currency": "USD"
+      "currency": "USD",
+      "source": "Hack-Nation Challenge 01 brief / FMCSA / moveBuddha / BBB (2026)",
+      "retrieved": "2026-07"
     }
   },
   "default_job_type": "local_2br_30mi",
@@ -229,7 +336,7 @@
     "threshold_pct_below_benchmark": 30,
     "never_rank_first": true,
     "benchmark_key": "local_2br_30mi",
-    "description": "Quotes ≥30% below benchmark midpoint are warned, never ranked first as winner."
+    "description": "Quotes \u226530% below benchmark midpoint are warned, never ranked first as winner."
   },
   "negotiation_levers": [
     "Require full itemization of labor hours, truck, packing, stairs, and fuel",
@@ -255,7 +362,7 @@
     "packing": "partial",
     "urgency": "within_2_weeks",
     "zip": "29730",
-    "notes": "Rock Hill → Charlotte ~25–30 mi; second-floor walk-up origin; no piano; need truck + 2 movers.",
+    "notes": "Rock Hill \u2192 Charlotte ~25\u201330 mi; second-floor walk-up origin; no piano; need truck + 2 movers.",
     "job_kind": "local_2br_30mi",
     "job_type": "local_2br_30mi"
   },
@@ -263,7 +370,7 @@
     "job_column_title": "Your job",
     "calls_column_title": "The calls",
     "deal_column_title": "Your deal",
-    "confirm_button": "Looks right — get me quotes",
+    "confirm_button": "Looks right \u2014 get me quotes",
     "demo_job_button": "Use demo job",
     "voice_intake_label": "Voice intake",
     "pdf_upload_label": "Drop a PDF quote"

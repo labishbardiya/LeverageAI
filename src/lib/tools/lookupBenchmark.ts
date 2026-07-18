@@ -33,14 +33,20 @@ export type LookupBenchmarkResult =
         high: number;
         unit?: string;
         currency: string;
+        source?: string;
+        retrieved?: string;
       };
       benchmark_low: number;
       benchmark_mid: number;
       benchmark_high: number;
       currency: string;
+      source: string;
+      retrieved?: string;
       red_flag_threshold: number;
       red_flag_below_pct: number;
       notes: string;
+      /** Plain speech for the negotiator */
+      citation_line: string;
     }
   | { ok: false; error: string; code: string };
 
@@ -102,6 +108,14 @@ export async function lookupBenchmark(
       config.red_flag.threshold_pct_below_benchmark ??
       Math.round(threshold * 100);
 
+    const source =
+      b.source ||
+      "Vertical config benchmark (see config/verticals for citations)";
+    const retrieved = b.retrieved;
+    const citation_line = `National cost guides put this job at $${low.toLocaleString()}–$${high.toLocaleString()}${
+      source ? ` (${source})` : ""
+    }.`;
+
     return {
       ok: true,
       vertical: config.id,
@@ -113,14 +127,19 @@ export async function lookupBenchmark(
         high,
         unit: b.unit,
         currency: b.currency ?? "USD",
+        source,
+        retrieved,
       },
       benchmark_low: low,
       benchmark_mid: mid,
       benchmark_high: high,
       currency: b.currency ?? "USD",
+      source,
+      retrieved,
       red_flag_threshold: threshold,
       red_flag_below_pct: pct,
       notes: `Market benchmark only — not a competing bid. Red-flag if total ≤ mid × (1 − ${threshold}). mid=${getBenchmarkMid(config, item)}`,
+      citation_line,
     };
   } catch (e) {
     return {
