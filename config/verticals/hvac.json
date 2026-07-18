@@ -1,0 +1,273 @@
+{
+  "id": "hvac",
+  "displayName": "HVAC / Home AC",
+  "name": "HVAC / Home AC",
+  "label": "HVAC / Home AC",
+  "short_label": "AC replacement",
+  "description": "Residential HVAC repair and replacement quotes — central AC, heat pumps, and related service calls.",
+  "intake": {
+    "questions": [
+      {
+        "id": "system_type",
+        "prompt": "What type of system needs service?",
+        "type": "enum",
+        "options": [
+          "central_ac",
+          "heat_pump",
+          "furnace",
+          "mini_split",
+          "package_unit",
+          "other"
+        ],
+        "required": true
+      },
+      {
+        "id": "system_age_years",
+        "prompt": "About how old is the system (years)?",
+        "type": "number",
+        "required": false
+      },
+      {
+        "id": "tonnage",
+        "prompt": "What is the system tonnage (e.g. 2, 2.5, 3, 3.5, 4, 5)?",
+        "type": "number",
+        "required": false
+      },
+      {
+        "id": "home_sqft",
+        "prompt": "Approximate home square footage?",
+        "type": "number",
+        "required": false
+      },
+      {
+        "id": "symptom",
+        "prompt": "What is the main symptom or reason for the call?",
+        "type": "enum",
+        "options": [
+          "not_cooling",
+          "not_heating",
+          "short_cycling",
+          "leaking_water",
+          "strange_noise",
+          "high_bills",
+          "no_airflow",
+          "full_replacement",
+          "other"
+        ],
+        "required": true
+      },
+      {
+        "id": "ductwork",
+        "prompt": "Ductwork condition or known issues?",
+        "type": "enum",
+        "options": [
+          "unknown",
+          "good",
+          "leaky",
+          "needs_modification",
+          "none_mini_split"
+        ],
+        "required": false
+      },
+      {
+        "id": "urgency",
+        "prompt": "How urgent is this?",
+        "type": "enum",
+        "options": ["emergency_today", "this_week", "flexible", "planning_only"],
+        "required": true
+      },
+      {
+        "id": "zip",
+        "prompt": "Service ZIP code?",
+        "type": "string",
+        "required": true
+      },
+      {
+        "id": "notes",
+        "prompt": "Any other details (brand, warranty, prior quotes)?",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  "job_spec_schema": {
+    "fields": {
+      "system_type": { "type": "string", "required": true },
+      "system_age_years": { "type": "number", "required": false },
+      "tonnage": { "type": "number", "required": false },
+      "home_sqft": { "type": "number", "required": false },
+      "symptom": { "type": "string", "required": true },
+      "ductwork": { "type": "string", "required": false },
+      "urgency": { "type": "string", "required": true },
+      "zip": { "type": "string", "required": true },
+      "notes": { "type": "string", "required": false },
+      "job_kind": {
+        "type": "string",
+        "required": false,
+        "description": "Canonical job kind for benchmark lookup, e.g. ac_replacement_3ton | repair_callout"
+      }
+    }
+  },
+  "job_spec_fields": [
+    { "key": "system_type", "label": "System", "type": "string" },
+    { "key": "tonnage", "label": "Tonnage", "type": "number" },
+    { "key": "home_sqft", "label": "Home sqft", "type": "number" },
+    { "key": "symptom", "label": "Symptom", "type": "string" },
+    { "key": "ductwork", "label": "Ductwork", "type": "string" },
+    { "key": "urgency", "label": "Urgency", "type": "string" },
+    { "key": "zip", "label": "ZIP", "type": "string" },
+    { "key": "notes", "label": "Notes", "type": "string" }
+  ],
+  "vendors": [
+    {
+      "id": "tough",
+      "displayName": "Summit Air",
+      "name": "Summit Air",
+      "role": "tough",
+      "persona": "tough",
+      "role_label": "Tough on price",
+      "public_blurb": "Premium local HVAC — thorough diagnostics, name-brand equipment, stands firm on quality installs.",
+      "pricing_strategy_secret": "Opens high (~$9.2–9.5k for 3-ton install). Will concede once a real written competing bid is cited; floor around mid-benchmark, not race-to-bottom.",
+      "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI. Human/docs and counter-agent prompt isolation only."
+    },
+    {
+      "id": "stonewaller",
+      "displayName": "ComfortPro",
+      "name": "ComfortPro",
+      "role": "stonewaller",
+      "persona": "stonewaller",
+      "role_label": "No phone quotes",
+      "public_blurb": "Established comfort company — prefers on-site estimates and scheduled tech visits before committing numbers.",
+      "pricing_strategy_secret": "Refuses firm phone quotes. Pushes callback/on-site only. Session should end documented_decline with callback commitment logged.",
+      "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI. Human/docs and counter-agent prompt isolation only."
+    },
+    {
+      "id": "upseller",
+      "displayName": "ValueHVAC",
+      "name": "ValueHVAC",
+      "role": "upseller",
+      "persona": "upseller",
+      "role_label": "Lowball + fees",
+      "public_blurb": "Budget-friendly HVAC — competitive headline rates and flexible scheduling.",
+      "pricing_strategy_secret": "Lowballs equipment line then layers refrigerant, permit, haul-away, and diagnostic fees. All must surface as itemized line_items; total often triggers red-flag vs benchmark.",
+      "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI. Human/docs and counter-agent prompt isolation only."
+    }
+  ],
+  "benchmarks": {
+    "ac_replacement_3ton": {
+      "label": "3-ton central AC replacement (installed)",
+      "unit": "job",
+      "fair_low": 6000,
+      "fair_high": 9500,
+      "low": 6000,
+      "mid": 7750,
+      "high": 9500,
+      "currency": "USD"
+    },
+    "repair_callout": {
+      "label": "Service / diagnostic callout",
+      "unit": "visit",
+      "fair_low": 150,
+      "fair_high": 450,
+      "low": 150,
+      "mid": 300,
+      "high": 450,
+      "currency": "USD"
+    },
+    "refrigerant_per_lb": {
+      "label": "Refrigerant (per lb)",
+      "unit": "lb",
+      "fair_low": 50,
+      "fair_high": 150,
+      "low": 50,
+      "mid": 100,
+      "high": 150,
+      "currency": "USD"
+    },
+    "labor_hourly": {
+      "label": "HVAC labor (hourly)",
+      "unit": "hour",
+      "fair_low": 85,
+      "fair_high": 175,
+      "low": 85,
+      "mid": 130,
+      "high": 175,
+      "currency": "USD"
+    },
+    "permit": {
+      "label": "Permit / inspection fee",
+      "unit": "job",
+      "fair_low": 75,
+      "fair_high": 350,
+      "low": 75,
+      "mid": 212.5,
+      "high": 350,
+      "currency": "USD"
+    },
+    "haul_away": {
+      "label": "Old unit haul-away / disposal",
+      "unit": "job",
+      "fair_low": 100,
+      "fair_high": 400,
+      "low": 100,
+      "mid": 250,
+      "high": 400,
+      "currency": "USD"
+    },
+    "equipment_3ton_unit": {
+      "label": "3-ton condenser + air handler equipment only",
+      "unit": "equipment",
+      "fair_low": 2800,
+      "fair_high": 5200,
+      "low": 2800,
+      "mid": 4000,
+      "high": 5200,
+      "currency": "USD"
+    }
+  },
+  "default_job_type": "ac_replacement_3ton",
+  "red_flag": {
+    "threshold_below_benchmark": 0.3,
+    "threshold_pct_below_benchmark": 30,
+    "never_rank_first": true,
+    "benchmark_key": "ac_replacement_3ton",
+    "description": "Quotes ≥30% below benchmark midpoint are warned, never ranked first as winner."
+  },
+  "negotiation_levers": [
+    "Require full itemization of equipment, labor, refrigerant, permit, and haul-away",
+    "Cite only real competing written bids from get_competing_bids (never invent)",
+    "Push back on padded or vague fees until line items are clear",
+    "Disclose AI/assistant role honestly if asked whether you are a robot",
+    "Close every call with a structured outcome: itemized_quote | callback_commitment | documented_decline"
+  ],
+  "glossary": {
+    "tonnage": "Cooling capacity; 1 ton ≈ 12,000 BTU/hr. Typical homes use 2–5 ton units.",
+    "SEER2": "Seasonal Energy Efficiency Ratio (updated standard) for AC efficiency.",
+    "callout": "Trip/diagnostic fee charged for a tech visit before repair.",
+    "line_set": "Copper refrigerant tubing connecting outdoor and indoor units.",
+    "ductwork": "Supply/return air paths; leaks reduce efficiency and comfort.",
+    "R-410A": "Common residential refrigerant; recovery and recharge are regulated."
+  },
+  "demo_defaults": {
+    "system_type": "central_ac",
+    "system_age_years": 14,
+    "tonnage": 3,
+    "home_sqft": 1800,
+    "symptom": "not_cooling",
+    "ductwork": "unknown",
+    "urgency": "this_week",
+    "zip": "28202",
+    "notes": "Compressor failing; homeowner wants full 3-ton central AC replacement quote, installed.",
+    "job_kind": "ac_replacement_3ton",
+    "job_type": "ac_replacement_3ton"
+  },
+  "ui": {
+    "job_column_title": "Your job",
+    "calls_column_title": "The calls",
+    "deal_column_title": "Your deal",
+    "confirm_button": "Looks right — get me quotes",
+    "demo_job_button": "Use demo job",
+    "voice_intake_label": "Voice intake",
+    "pdf_upload_label": "Drop a PDF quote"
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "vertical": "movers",
+  "job_spec": {
+    "service": "Local apartment move",
+    "from_zip": "10001",
+    "to_zip": "11201",
+    "bedrooms": "2-bedroom apartment",
+    "stairs": "3rd floor walk-up → ground floor",
+    "move_date": "Saturday in 10 days",
+    "crew_hours": "4–6 hours",
+    "notes": "Piano not included; elevator at destination only"
+  },
+  "events": [
+    { "t": 0, "type": "status", "vendor_id": "tough", "status": "dialing" },
+    { "t": 0, "type": "status", "vendor_id": "stonewaller", "status": "dialing" },
+    { "t": 0, "type": "status", "vendor_id": "upseller", "status": "dialing" },
+
+    { "t": 800, "type": "status", "vendor_id": "tough", "status": "negotiating" },
+    { "t": 900, "type": "status", "vendor_id": "upseller", "status": "negotiating" },
+    { "t": 1000, "type": "status", "vendor_id": "stonewaller", "status": "negotiating" },
+
+    {
+      "t": 1200,
+      "type": "transcript",
+      "vendor_id": "tough",
+      "speaker": "negotiator",
+      "text": "2BR local move 10001 to 11201, walk-up origin, Saturday.",
+      "ts": 2
+    },
+    {
+      "t": 1800,
+      "type": "transcript",
+      "vendor_id": "tough",
+      "speaker": "vendor",
+      "text": "Three movers, truck, pads — eighteen hundred flat.",
+      "ts": 8
+    },
+    { "t": 2000, "type": "price", "vendor_id": "tough", "price": 1800 },
+
+    {
+      "t": 2200,
+      "type": "transcript",
+      "vendor_id": "upseller",
+      "speaker": "vendor",
+      "text": "We can do nine-fifty for labor. Materials separate.",
+      "ts": 9
+    },
+    { "t": 2400, "type": "price", "vendor_id": "upseller", "price": 950 },
+
+    {
+      "t": 3000,
+      "type": "transcript",
+      "vendor_id": "stonewaller",
+      "speaker": "vendor",
+      "text": "We never quote without a virtual survey first.",
+      "ts": 10
+    },
+
+    {
+      "t": 4000,
+      "type": "transcript",
+      "vendor_id": "tough",
+      "speaker": "negotiator",
+      "text": "I have a competing bid at fourteen hundred all-in.",
+      "ts": 20
+    },
+    { "t": 4200, "type": "competing_bid_used", "vendor_id": "tough" },
+    {
+      "t": 4600,
+      "type": "transcript",
+      "vendor_id": "tough",
+      "speaker": "vendor",
+      "text": "Alright — fifteen-fifty if you lock Saturday.",
+      "ts": 26
+    },
+    { "t": 4800, "type": "price", "vendor_id": "tough", "price": 1550 },
+
+    {
+      "t": 5500,
+      "type": "transcript",
+      "vendor_id": "upseller",
+      "speaker": "vendor",
+      "text": "Plus packing kit, stair fee, and fuel surcharge.",
+      "ts": 22
+    },
+    { "t": 5800, "type": "price", "vendor_id": "upseller", "price": 950 },
+
+    {
+      "t": 7000,
+      "type": "outcome",
+      "vendor_id": "stonewaller",
+      "outcome": "documented_decline",
+      "price": null,
+      "callback_at": "Survey tomorrow 2 PM",
+      "why": "No phone quote; virtual survey callback logged."
+    },
+    { "t": 7100, "type": "status", "vendor_id": "stonewaller", "status": "declined" },
+
+    {
+      "t": 8000,
+      "type": "outcome",
+      "vendor_id": "tough",
+      "outcome": "itemized_quote",
+      "price": 1550,
+      "line_items": [
+        { "label": "3-mover crew + truck", "amount": 1200, "evidence_ts": 8 },
+        { "label": "Pads & basic protection", "amount": 150, "evidence_ts": 8 },
+        { "label": "Stair / access", "amount": 200, "evidence_ts": 26 }
+      ],
+      "why": "Dropped after competing bid cited; clean itemization."
+    },
+    { "t": 8100, "type": "status", "vendor_id": "tough", "status": "done" },
+
+    {
+      "t": 9000,
+      "type": "outcome",
+      "vendor_id": "upseller",
+      "outcome": "itemized_quote",
+      "price": 950,
+      "line_items": [
+        { "label": "Labor (advertised)", "amount": 650, "evidence_ts": 9 },
+        { "label": "Packing kit", "amount": 120, "evidence_ts": 22 },
+        { "label": "Stair fee", "amount": 100, "evidence_ts": 22 },
+        { "label": "Fuel surcharge", "amount": 80, "evidence_ts": 22 }
+      ],
+      "why": "Lowball total with fees itemized — ≥30% under market median."
+    },
+    { "t": 9100, "type": "status", "vendor_id": "upseller", "status": "done" },
+
+    { "t": 10000, "type": "complete" }
+  ]
+}

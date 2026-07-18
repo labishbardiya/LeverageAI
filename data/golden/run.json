@@ -1,0 +1,497 @@
+{
+  "id": "golden-run-hvac-001",
+  "version": 1,
+  "vertical": "hvac",
+  "label": "Golden HVAC demo path (acceptance)",
+  "created_at": "2026-07-19T12:00:00.000Z",
+  "job_spec_initial": {
+    "system_type": "central_ac",
+    "system_age_years": 14,
+    "tonnage": 3,
+    "home_sqft": 1800,
+    "symptom": "not_cooling",
+    "ductwork": "unknown",
+    "urgency": "this_week",
+    "zip": "28202",
+    "notes": "Compressor failing; homeowner wants full 3-ton central AC replacement quote, installed.",
+    "job_kind": "ac_replacement_3ton",
+    "job_type": "ac_replacement_3ton"
+  },
+  "job_spec_confirmed": {
+    "system_type": "central_ac",
+    "system_age_years": 14,
+    "tonnage": 3,
+    "home_sqft": 1800,
+    "symptom": "not_cooling",
+    "ductwork": "unknown",
+    "urgency": "this_week",
+    "zip": "28202",
+    "notes": "Compressor failing; homeowner wants full 3-ton central AC replacement quote, installed.",
+    "job_kind": "ac_replacement_3ton",
+    "job_type": "ac_replacement_3ton"
+  },
+  "job_spec": {
+    "system_type": "central_ac",
+    "system_age_years": 14,
+    "tonnage": 3,
+    "home_sqft": 1800,
+    "symptom": "not_cooling",
+    "ductwork": "unknown",
+    "urgency": "this_week",
+    "zip": "28202",
+    "notes": "Compressor failing; homeowner wants full 3-ton central AC replacement quote, installed.",
+    "job_kind": "ac_replacement_3ton",
+    "job_type": "ac_replacement_3ton"
+  },
+  "benchmark_key": "ac_replacement_3ton",
+  "benchmark_used": {
+    "label": "3-ton central AC replacement (installed)",
+    "unit": "job",
+    "fair_low": 6000,
+    "fair_high": 9500,
+    "currency": "USD",
+    "mid": 7750
+  },
+  "red_flag_threshold": 0.3,
+  "sessions": [
+    {
+      "id": "session-summit-tough",
+      "vendor_id": "tough",
+      "vendor_display_name": "Summit Air",
+      "vendor_name": "Summit Air",
+      "status": "completed",
+      "outcome_type": "itemized_quote",
+      "price_history": [
+        { "ts_ms": 45000, "total": 9400, "note": "opening highball" },
+        { "ts_ms": 92000, "total": 8900, "note": "minor concession on labor" },
+        {
+          "ts_ms": 128000,
+          "total": 7850,
+          "note": "dropped after negotiator cited real competing bid from ValueHVAC"
+        }
+      ],
+      "quotes": [
+        {
+          "line_items": [
+            { "label": "3-ton package highball", "amount": 9400 }
+          ],
+          "total": 9400,
+          "notes": "Initial highball"
+        },
+        {
+          "line_items": [
+            {
+              "label": "3-ton condenser + air handler (installed equipment)",
+              "amount": 4800
+            },
+            { "label": "Labor & install", "amount": 2200 },
+            { "label": "Refrigerant charge", "amount": 250 },
+            { "label": "Permit", "amount": 200 },
+            { "label": "Haul-away old unit", "amount": 200 },
+            { "label": "Diagnostic (waived if install)", "amount": 200 }
+          ],
+          "total": 7850,
+          "notes": "After competing bid cited"
+        }
+      ],
+      "quote": {
+        "vendor_id": "tough",
+        "vendor_display_name": "Summit Air",
+        "currency": "USD",
+        "total": 7850,
+        "line_items": [
+          {
+            "label": "3-ton condenser + air handler (installed equipment)",
+            "amount": 4800
+          },
+          { "label": "Labor & install", "amount": 2200 },
+          { "label": "Refrigerant charge", "amount": 250 },
+          { "label": "Permit", "amount": 200 },
+          { "label": "Haul-away old unit", "amount": 200 },
+          { "label": "Diagnostic (waived if install)", "amount": 200 }
+        ],
+        "valid_until": "2026-07-26",
+        "notes": "Final after competing-bid concession"
+      },
+      "red_flag": false,
+      "competing_bid_cited": {
+        "source_vendor_id": "upseller",
+        "source_vendor_display_name": "ValueHVAC",
+        "amount": 4689,
+        "ts_ms": 115000,
+        "transcript_ref": "session-summit-tough:t-cite-1"
+      },
+      "transcript_events": [
+        {
+          "id": "t0",
+          "ts_ms": 0,
+          "speaker": "negotiator",
+          "text": "Hi, I'm calling on behalf of a homeowner in ZIP 28202 about a full 3-ton central AC replacement. Can I speak with someone who can quote installed pricing?"
+        },
+        {
+          "id": "t1",
+          "ts_ms": 8000,
+          "speaker": "vendor",
+          "text": "Summit Air, this is Mike. Yeah, we can talk numbers. What's going on with the system?"
+        },
+        {
+          "id": "t2",
+          "ts_ms": 16000,
+          "speaker": "negotiator",
+          "text": "Fourteen-year-old 3-ton central AC, about 1800 square feet, compressor failing, not cooling. Looking for turnkey installed replacement this week if possible."
+        },
+        {
+          "id": "t3",
+          "ts_ms": 28000,
+          "speaker": "vendor",
+          "text": "Hold on — am I talking to a robot? This sounds scripted."
+        },
+        {
+          "id": "t4",
+          "ts_ms": 34000,
+          "speaker": "negotiator",
+          "text": "Yes — I'm an AI voice assistant helping the homeowner gather comparable written quotes. I'll only use real numbers from this call and competing bids we've already logged. Happy to continue if that works for you."
+        },
+        {
+          "id": "t5",
+          "ts_ms": 45000,
+          "speaker": "vendor",
+          "text": "Fine. For a quality 3-ton install with name-brand equipment, you're looking at ninety-four hundred all-in. That's equipment, labor, start-up."
+        },
+        {
+          "id": "t6",
+          "ts_ms": 56000,
+          "speaker": "negotiator",
+          "text": "Can you itemize that — equipment, labor, refrigerant, permit, and haul-away separately?"
+        },
+        {
+          "id": "t7",
+          "ts_ms": 68000,
+          "speaker": "vendor",
+          "text": "Equipment forty-eight hundred, labor twenty-eight hundred, refrigerant three hundred, permit two hundred, haul-away three hundred, diagnostic two hundred. Still lands around ninety-four."
+        },
+        {
+          "id": "t8",
+          "ts_ms": 82000,
+          "speaker": "negotiator",
+          "text": "Labor and haul-away look padded versus typical fair ranges. Can you sharpen labor if we lock a date this week?"
+        },
+        {
+          "id": "t9",
+          "ts_ms": 92000,
+          "speaker": "vendor",
+          "text": "I can come off a bit on labor — call it eighty-nine hundred total if you book by Friday."
+        },
+        {
+          "id": "t-cite-1",
+          "ts_ms": 115000,
+          "speaker": "negotiator",
+          "text": "I have a competing written bid already logged for this same job from ValueHVAC at four thousand six hundred eighty-nine dollars itemized. I'm not inventing that — it's on file for this job. Can Summit Air meet something closer to a fair mid-market install?"
+        },
+        {
+          "id": "t10",
+          "ts_ms": 128000,
+          "speaker": "vendor",
+          "text": "Alright. If that's a real written number, I'll do seventy-eight fifty installed: forty-eight hundred equipment, twenty-two hundred labor, two-fifty refrigerant, two hundred permit, two hundred haul-away, two hundred diagnostic. That's as low as we go."
+        },
+        {
+          "id": "t11",
+          "ts_ms": 140000,
+          "speaker": "negotiator",
+          "text": "Thank you. Logging itemized quote total seven thousand eight hundred fifty dollars for Summit Air."
+        }
+      ]
+    },
+    {
+      "id": "session-comfortpro-stonewaller",
+      "vendor_id": "stonewaller",
+      "vendor_display_name": "ComfortPro",
+      "vendor_name": "ComfortPro",
+      "status": "completed",
+      "outcome_type": "documented_decline",
+      "callback_window": "weekday mornings next 2 business days",
+      "callback": {
+        "committed": true,
+        "window": "weekday mornings next 2 business days",
+        "contact_name": "Dispatch desk",
+        "notes": "Requires on-site estimate; will not firm phone quote"
+      },
+      "price_history": [],
+      "quotes": [],
+      "quote": null,
+      "red_flag": false,
+      "transcript_events": [
+        {
+          "id": "c0",
+          "ts_ms": 0,
+          "speaker": "negotiator",
+          "text": "Hello, calling for a homeowner in 28202 about a 3-ton central AC full replacement. Can ComfortPro provide an installed phone quote?"
+        },
+        {
+          "id": "c1",
+          "ts_ms": 9000,
+          "speaker": "vendor",
+          "text": "ComfortPro dispatch. We don't quote replacements over the phone. Policy is on-site only."
+        },
+        {
+          "id": "c2",
+          "ts_ms": 18000,
+          "speaker": "negotiator",
+          "text": "Understood. Even a ballpark range for a standard 3-ton install would help the homeowner compare options today."
+        },
+        {
+          "id": "c3",
+          "ts_ms": 28000,
+          "speaker": "vendor",
+          "text": "I can't put any number on the phone. Too many variables. We need a tech to see the pad, electrical, and ductwork."
+        },
+        {
+          "id": "c4",
+          "ts_ms": 40000,
+          "speaker": "negotiator",
+          "text": "Can we schedule a callback or on-site visit commitment, and document that a firm phone quote was declined?"
+        },
+        {
+          "id": "c5",
+          "ts_ms": 50000,
+          "speaker": "vendor",
+          "text": "Yes — have them call dispatch weekday mornings the next two business days. We'll book an estimate. No phone price today."
+        },
+        {
+          "id": "c6",
+          "ts_ms": 60000,
+          "speaker": "negotiator",
+          "text": "Logged as documented decline with callback commitment for ComfortPro. Thank you."
+        }
+      ]
+    },
+    {
+      "id": "session-valuehvac-upseller",
+      "vendor_id": "upseller",
+      "vendor_display_name": "ValueHVAC",
+      "vendor_name": "ValueHVAC",
+      "status": "completed",
+      "outcome_type": "itemized_quote",
+      "price_history": [
+        { "ts_ms": 22000, "total": 3999, "note": "lowball headline before fees" },
+        {
+          "ts_ms": 78000,
+          "total": 4689,
+          "note": "after itemizing refrigerant, permit, haul-away, diagnostic"
+        }
+      ],
+      "quotes": [
+        {
+          "line_items": [
+            { "label": "3-ton unit package (promo base)", "amount": 3500 },
+            { "label": "Refrigerant", "amount": 450 },
+            { "label": "Permit", "amount": 300 },
+            { "label": "Haul-away", "amount": 250 },
+            { "label": "Diagnostic", "amount": 189 }
+          ],
+          "total": 4689,
+          "notes": "Hidden fees itemized"
+        }
+      ],
+      "quote": {
+        "vendor_id": "upseller",
+        "vendor_display_name": "ValueHVAC",
+        "currency": "USD",
+        "total": 4689,
+        "line_items": [
+          { "label": "3-ton unit package (promo base)", "amount": 3500 },
+          { "label": "Refrigerant", "amount": 450 },
+          { "label": "Permit", "amount": 300 },
+          { "label": "Haul-away", "amount": 250 },
+          { "label": "Diagnostic", "amount": 189 }
+        ],
+        "valid_until": "2026-07-22",
+        "notes": "Headline low; hidden fees surfaced as itemized lines"
+      },
+      "red_flag": true,
+      "red_flag_reason": "Total $4689 is ≥30% below benchmark mid $7750 for ac_replacement_3ton (threshold 0.30 → flag if ≤ $5425)",
+      "transcript_events": [
+        {
+          "id": "v0",
+          "ts_ms": 0,
+          "speaker": "negotiator",
+          "text": "Hi ValueHVAC — homeowner needs a full 3-ton central AC replacement install quote, ZIP 28202, this week."
+        },
+        {
+          "id": "v1",
+          "ts_ms": 10000,
+          "speaker": "vendor",
+          "text": "You called the right place. We can do a three-ton install starting at three thousand nine hundred ninety-nine."
+        },
+        {
+          "id": "v2",
+          "ts_ms": 22000,
+          "speaker": "negotiator",
+          "text": "Is that all-in installed, including refrigerant, permit, haul-away, and diagnostic?"
+        },
+        {
+          "id": "v3",
+          "ts_ms": 32000,
+          "speaker": "vendor",
+          "text": "That's the unit package promo. Other stuff is standard add-ons."
+        },
+        {
+          "id": "v4",
+          "ts_ms": 42000,
+          "speaker": "negotiator",
+          "text": "Please itemize every fee so we have a written total for this job."
+        },
+        {
+          "id": "v5",
+          "ts_ms": 55000,
+          "speaker": "vendor",
+          "text": "Fine: base thirty-five hundred, refrigerant four-fifty, permit three hundred, haul-away two-fifty, diagnostic one eighty-nine."
+        },
+        {
+          "id": "v6",
+          "ts_ms": 78000,
+          "speaker": "negotiator",
+          "text": "Confirming itemized total four thousand six hundred eighty-nine dollars. Logging that as the written quote for this job."
+        },
+        {
+          "id": "v7",
+          "ts_ms": 88000,
+          "speaker": "vendor",
+          "text": "Yep. That's the number if they book the promo slot."
+        }
+      ]
+    }
+  ],
+  "ranked_report": [
+    {
+      "rank": 1,
+      "vendor_id": "tough",
+      "vendor_display_name": "Summit Air",
+      "total": 7850,
+      "outcome_type": "itemized_quote",
+      "red_flag": false,
+      "recommendation": "recommended",
+      "evidence_ts": [
+        {
+          "session_id": "session-summit-tough",
+          "event_id": "t-cite-1",
+          "ts_ms": 115000
+        },
+        {
+          "session_id": "session-summit-tough",
+          "event_id": "t10",
+          "ts_ms": 128000
+        }
+      ]
+    },
+    {
+      "rank": 2,
+      "vendor_id": "upseller",
+      "vendor_display_name": "ValueHVAC",
+      "total": 4689,
+      "outcome_type": "itemized_quote",
+      "red_flag": true,
+      "recommendation": "warning_not_winner",
+      "evidence_ts": [
+        {
+          "session_id": "session-valuehvac-upseller",
+          "event_id": "v5",
+          "ts_ms": 55000
+        },
+        {
+          "session_id": "session-valuehvac-upseller",
+          "event_id": "v6",
+          "ts_ms": 78000
+        }
+      ]
+    },
+    {
+      "rank": 3,
+      "vendor_id": "stonewaller",
+      "vendor_display_name": "ComfortPro",
+      "total": null,
+      "outcome_type": "documented_decline",
+      "red_flag": false,
+      "recommendation": "callback_only",
+      "evidence_ts": [
+        {
+          "session_id": "session-comfortpro-stonewaller",
+          "event_id": "c5",
+          "ts_ms": 50000
+        }
+      ]
+    }
+  ],
+  "replay_events": [
+    {
+      "ts_ms": 0,
+      "type": "job_confirmed",
+      "payload": { "vertical": "hvac", "job_kind": "ac_replacement_3ton" }
+    },
+    {
+      "ts_ms": 1000,
+      "type": "session_start",
+      "session_id": "session-valuehvac-upseller"
+    },
+    {
+      "ts_ms": 1200,
+      "type": "session_start",
+      "session_id": "session-summit-tough"
+    },
+    {
+      "ts_ms": 1400,
+      "type": "session_start",
+      "session_id": "session-comfortpro-stonewaller"
+    },
+    {
+      "ts_ms": 78000,
+      "type": "quote_logged",
+      "session_id": "session-valuehvac-upseller",
+      "total": 4689
+    },
+    {
+      "ts_ms": 115000,
+      "type": "competing_bid_cited",
+      "session_id": "session-summit-tough",
+      "source_session_id": "session-valuehvac-upseller",
+      "amount": 4689
+    },
+    {
+      "ts_ms": 128000,
+      "type": "price_drop",
+      "session_id": "session-summit-tough",
+      "from": 8900,
+      "to": 7850
+    },
+    {
+      "ts_ms": 60000,
+      "type": "session_complete",
+      "session_id": "session-comfortpro-stonewaller",
+      "outcome_type": "documented_decline"
+    },
+    {
+      "ts_ms": 88000,
+      "type": "session_complete",
+      "session_id": "session-valuehvac-upseller",
+      "outcome_type": "itemized_quote"
+    },
+    {
+      "ts_ms": 140000,
+      "type": "session_complete",
+      "session_id": "session-summit-tough",
+      "outcome_type": "itemized_quote"
+    },
+    {
+      "ts_ms": 150000,
+      "type": "report_ready",
+      "recommended_vendor_id": "tough"
+    }
+  ],
+  "acceptance_notes": [
+    "Tough (Summit Air) price moves 9400→7850 after real competing bid cited",
+    "Stonewaller (ComfortPro) ends documented_decline with callback",
+    "Upseller (ValueHVAC) hidden fees itemized (refrigerant 450, permit 300, haul-away 250, diagnostic 189)",
+    "Red-flag: ValueHVAC total 4689 is ≥30% below benchmark mid 7750",
+    "AI disclosure when asked 'am I talking to a robot?'"
+  ]
+}

@@ -1,0 +1,2 @@
+Placeholder audio/transcript stub for ComfortPro (stonewaller) golden replay.
+Real media not required for eval — UI may link this path during demo.

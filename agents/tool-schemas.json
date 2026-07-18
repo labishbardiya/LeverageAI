@@ -1,0 +1,427 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "The Negotiator — ElevenLabs agent tool definitions",
+  "description": "Webhook / client tool configs for dashboard wiring. Base URL is the deployed app origin (or ngrok/localhost tunnel). Paths match expected Next.js routes under /api/tools/*.",
+  "meta": {
+    "baseUrlPlaceholder": "https://YOUR_HOST",
+    "auth": {
+      "type": "header",
+      "headerName": "Authorization",
+      "headerValue": "Bearer ${TOOLS_WEBHOOK_SECRET}",
+      "notes": "Optional shared secret. If unused in demo, leave auth open on localhost only."
+    },
+    "agents": {
+      "intake": ["submit_spec"],
+      "negotiator": [
+        "log_quote",
+        "get_competing_bids",
+        "lookup_benchmark",
+        "close_session"
+      ],
+      "counter_agents": []
+    },
+    "notes": [
+      "Counter-agents have NO tools — pure conversational personas.",
+      "submit_spec may be Client tool (browser) OR webhook POST; both shapes are listed.",
+      "Negotiator tools should be Webhook tools pointing at the app API."
+    ]
+  },
+  "tools": [
+    {
+      "name": "submit_spec",
+      "type": "client_or_webhook",
+      "description": "Submit the confirmed homeowner job specification after the user explicitly confirms the spoken summary. Only call when confirmed is true.",
+      "agents": ["intake"],
+      "preferred_execution": "client",
+      "webhook": {
+        "method": "POST",
+        "url": "https://YOUR_HOST/api/tools/submit_spec",
+        "content_type": "application/json"
+      },
+      "parameters": {
+        "type": "object",
+        "required": ["vertical", "confirmed", "symptom", "zip"],
+        "properties": {
+          "vertical": {
+            "type": "string",
+            "description": "Vertical id from config (e.g. hvac, movers)."
+          },
+          "system_type": {
+            "type": "string",
+            "description": "System category, e.g. central_ac, heat_pump, mini_split."
+          },
+          "tonnage": {
+            "type": ["number", "null"],
+            "description": "Approx tonnage if known; null if unknown."
+          },
+          "sqft": {
+            "type": ["number", "null"],
+            "description": "Conditioned square footage if known; null if unknown."
+          },
+          "symptom": {
+            "type": "string",
+            "description": "Concise problem / job need description."
+          },
+          "ductwork": {
+            "type": "string",
+            "description": "existing_ok | needs_repair | unknown | n_a_ductless or short free text."
+          },
+          "urgency": {
+            "type": "string",
+            "description": "emergency_today | this_week | flexible or short free text."
+          },
+          "zip": {
+            "type": "string",
+            "description": "Service ZIP code."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional extras (brand, age, access)."
+          },
+          "confirmed": {
+            "type": "boolean",
+            "description": "Must be true only after explicit user confirmation of the read-back."
+          }
+        },
+        "additionalProperties": false
+      },
+      "api_schema_elevenlabs": {
+        "type": "webhook",
+        "name": "submit_spec",
+        "description": "Submit the confirmed homeowner job specification after the user explicitly confirms the spoken summary.",
+        "api_schema": {
+          "url": "https://YOUR_HOST/api/tools/submit_spec",
+          "method": "POST",
+          "content_type": "application/json",
+          "request_body_schema": {
+            "type": "object",
+            "description": "Confirmed job_spec payload",
+            "required": ["vertical", "confirmed", "symptom", "zip"],
+            "properties": {
+              "vertical": { "type": "string", "description": "Vertical id (hvac, movers, ...)" },
+              "system_type": { "type": "string", "description": "System type string" },
+              "tonnage": { "type": "number", "description": "Tonnage if known" },
+              "sqft": { "type": "number", "description": "Square footage if known" },
+              "symptom": { "type": "string", "description": "Symptom / job need" },
+              "ductwork": { "type": "string", "description": "Ductwork status" },
+              "urgency": { "type": "string", "description": "Urgency" },
+              "zip": { "type": "string", "description": "ZIP code" },
+              "notes": { "type": "string", "description": "Optional notes" },
+              "confirmed": { "type": "boolean", "description": "User confirmed summary" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "log_quote",
+      "type": "webhook",
+      "description": "Persist an itemized quote the vendor committed to on this call. Server validates schema and job linkage. Call again if price moves down mid-call with the new total.",
+      "agents": ["negotiator"],
+      "webhook": {
+        "method": "POST",
+        "url": "https://YOUR_HOST/api/tools/log_quote",
+        "content_type": "application/json"
+      },
+      "parameters": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "session_id",
+          "company_key",
+          "company_name",
+          "currency",
+          "line_items",
+          "grand_total"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "description": "UUID of the confirmed job."
+          },
+          "session_id": {
+            "type": "string",
+            "description": "UUID of this negotiation session/call."
+          },
+          "company_key": {
+            "type": "string",
+            "description": "Stable key: tough | stonewaller | upseller (or config company id)."
+          },
+          "company_name": {
+            "type": "string",
+            "description": "Display name as spoken, e.g. Summit Air Pros."
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO currency code, usually USD."
+          },
+          "line_items": {
+            "type": "array",
+            "description": "Itemized lines the vendor stated. If only a lump sum, use one line labeled total/base.",
+            "items": {
+              "type": "object",
+              "required": ["label", "amount"],
+              "properties": {
+                "label": { "type": "string" },
+                "amount": { "type": "number" },
+                "optional": { "type": "boolean" }
+              }
+            }
+          },
+          "grand_total": {
+            "type": "number",
+            "description": "Final total the vendor committed to on the call."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional context (price dropped from X, verbal only, etc.)."
+          },
+          "is_update": {
+            "type": "boolean",
+            "description": "True if this replaces/improves a prior log from the same session."
+          }
+        },
+        "additionalProperties": false
+      },
+      "api_schema_elevenlabs": {
+        "type": "webhook",
+        "name": "log_quote",
+        "description": "Write an itemized vendor quote for this job/session to the database. Only log amounts the vendor actually stated.",
+        "api_schema": {
+          "url": "https://YOUR_HOST/api/tools/log_quote",
+          "method": "POST",
+          "content_type": "application/json",
+          "request_body_schema": {
+            "type": "object",
+            "required": [
+              "job_id",
+              "session_id",
+              "company_key",
+              "company_name",
+              "currency",
+              "line_items",
+              "grand_total"
+            ],
+            "properties": {
+              "job_id": { "type": "string", "description": "Job UUID" },
+              "session_id": { "type": "string", "description": "Session UUID" },
+              "company_key": { "type": "string", "description": "tough | stonewaller | upseller" },
+              "company_name": { "type": "string", "description": "Vendor display name" },
+              "currency": { "type": "string", "description": "USD" },
+              "line_items": {
+                "type": "string",
+                "description": "JSON array string of {label, amount} lines if nested arrays are awkward in dashboard; prefer native array when supported."
+              },
+              "grand_total": { "type": "number", "description": "Grand total number" },
+              "notes": { "type": "string", "description": "Optional notes" },
+              "is_update": { "type": "boolean", "description": "True if mid-call price improvement" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "get_competing_bids",
+      "type": "webhook",
+      "description": "Return real competing quotes already logged in the DB for this job. Honesty backbone — cite ONLY these bids when negotiating.",
+      "agents": ["negotiator"],
+      "webhook": {
+        "method": "POST",
+        "url": "https://YOUR_HOST/api/tools/get_competing_bids",
+        "content_type": "application/json"
+      },
+      "parameters": {
+        "type": "object",
+        "required": ["job_id"],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "description": "UUID of the confirmed job."
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Current session UUID; used to exclude or include self per server policy."
+          },
+          "exclude_company_key": {
+            "type": "string",
+            "description": "Optional company_key for the vendor currently on the line."
+          }
+        },
+        "additionalProperties": false
+      },
+      "response_shape": {
+        "bids": [
+          {
+            "company_key": "upseller",
+            "company_name": "ValueHVAC",
+            "grand_total": 6389,
+            "currency": "USD",
+            "line_items": [{ "label": "base", "amount": 5200 }],
+            "logged_at": "ISO-8601",
+            "quote_id": "uuid"
+          }
+        ]
+      },
+      "api_schema_elevenlabs": {
+        "type": "webhook",
+        "name": "get_competing_bids",
+        "description": "Fetch real DB quotes for this job to use as negotiation leverage. Never invent bids not returned here.",
+        "api_schema": {
+          "url": "https://YOUR_HOST/api/tools/get_competing_bids",
+          "method": "POST",
+          "content_type": "application/json",
+          "request_body_schema": {
+            "type": "object",
+            "required": ["job_id"],
+            "properties": {
+              "job_id": { "type": "string", "description": "Job UUID" },
+              "session_id": { "type": "string", "description": "Current session UUID" },
+              "exclude_company_key": {
+                "type": "string",
+                "description": "Vendor on this call (tough|stonewaller|upseller)"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "lookup_benchmark",
+      "type": "webhook",
+      "description": "Look up vertical price benchmarks / fair range for this job type from config-backed server data. Market context only — not a competing bid.",
+      "agents": ["negotiator"],
+      "webhook": {
+        "method": "POST",
+        "url": "https://YOUR_HOST/api/tools/lookup_benchmark",
+        "content_type": "application/json"
+      },
+      "parameters": {
+        "type": "object",
+        "required": ["job_id"],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "description": "Job UUID; server loads job_spec + vertical benchmarks."
+          },
+          "vertical": {
+            "type": "string",
+            "description": "Optional override vertical id."
+          }
+        },
+        "additionalProperties": false
+      },
+      "response_shape": {
+        "vertical": "hvac",
+        "benchmark_low": 0,
+        "benchmark_mid": 0,
+        "benchmark_high": 0,
+        "currency": "USD",
+        "red_flag_below_pct": 30,
+        "notes": "string"
+      },
+      "api_schema_elevenlabs": {
+        "type": "webhook",
+        "name": "lookup_benchmark",
+        "description": "Return fair-market benchmark range for the job. Do not treat as a competitor quote.",
+        "api_schema": {
+          "url": "https://YOUR_HOST/api/tools/lookup_benchmark",
+          "method": "POST",
+          "content_type": "application/json",
+          "request_body_schema": {
+            "type": "object",
+            "required": ["job_id"],
+            "properties": {
+              "job_id": { "type": "string", "description": "Job UUID" },
+              "vertical": { "type": "string", "description": "Optional vertical id" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "close_session",
+      "type": "webhook",
+      "description": "Terminate this negotiation session with exactly one structured outcome: itemized_quote | callback_commitment | documented_decline.",
+      "agents": ["negotiator"],
+      "webhook": {
+        "method": "POST",
+        "url": "https://YOUR_HOST/api/tools/close_session",
+        "content_type": "application/json"
+      },
+      "parameters": {
+        "type": "object",
+        "required": ["job_id", "session_id", "outcome", "summary"],
+        "properties": {
+          "job_id": { "type": "string", "description": "Job UUID" },
+          "session_id": { "type": "string", "description": "Session UUID" },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "itemized_quote",
+              "callback_commitment",
+              "documented_decline"
+            ],
+            "description": "Exactly one terminal outcome."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Short human summary of how the call ended."
+          },
+          "final_total": {
+            "type": ["number", "null"],
+            "description": "Set when outcome is itemized_quote."
+          },
+          "callback_window": {
+            "type": ["string", "null"],
+            "description": "When outcome is callback_commitment — e.g. tomorrow 9-11am."
+          },
+          "decline_reason": {
+            "type": ["string", "null"],
+            "description": "When outcome is documented_decline — why no quote."
+          },
+          "company_key": {
+            "type": "string",
+            "description": "tough | stonewaller | upseller"
+          }
+        },
+        "additionalProperties": false
+      },
+      "api_schema_elevenlabs": {
+        "type": "webhook",
+        "name": "close_session",
+        "description": "End the call with one structured outcome: itemized_quote, callback_commitment, or documented_decline.",
+        "api_schema": {
+          "url": "https://YOUR_HOST/api/tools/close_session",
+          "method": "POST",
+          "content_type": "application/json",
+          "request_body_schema": {
+            "type": "object",
+            "required": ["job_id", "session_id", "outcome", "summary"],
+            "properties": {
+              "job_id": { "type": "string", "description": "Job UUID" },
+              "session_id": { "type": "string", "description": "Session UUID" },
+              "outcome": {
+                "type": "string",
+                "description": "itemized_quote | callback_commitment | documented_decline"
+              },
+              "summary": { "type": "string", "description": "Brief outcome summary" },
+              "final_total": { "type": "number", "description": "Final total if quoted" },
+              "callback_window": {
+                "type": "string",
+                "description": "Callback window if committed"
+              },
+              "decline_reason": {
+                "type": "string",
+                "description": "Decline reason if documented_decline"
+              },
+              "company_key": {
+                "type": "string",
+                "description": "tough | stonewaller | upseller"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

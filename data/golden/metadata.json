@@ -1,0 +1,28 @@
+{
+  "name": "hvac-golden-run-v1",
+  "vertical": "hvac",
+  "description": "Replay payload proving price drop on competing bid, stonewaller documented_decline, upseller itemized hidden fees + red flag, and AI disclosure honesty.",
+  "created_for": "Hack-Nation Challenge 01 · ElevenLabs · The Negotiator",
+  "acceptance_coverage": [
+    "itemized_quote with line_items",
+    "price decrease mid-call after real competing bid cite",
+    "documented_decline + callback (stonewaller)",
+    "upseller hidden fees itemized",
+    "red_flag ≥30% below benchmark mid",
+    "robot disclosure honesty"
+  ],
+  "audio_placeholders": {
+    "note": "Optional demo audio stubs under /public/golden/ — not required for eval",
+    "paths": [
+      "/golden/summit-air-sample.txt",
+      "/golden/comfortpro-sample.txt",
+      "/golden/valuehvac-sample.txt"
+    ]
+  },
+  "run_file": "data/golden/run.json",
+  "vendors": {
+    "tough": "Summit Air",
+    "stonewaller": "ComfortPro",
+    "upseller": "ValueHVAC"
+  }
+}
