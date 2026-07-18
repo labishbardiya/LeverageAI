@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCompetingBids } from "@/lib/tools/getCompetingBids";
+import { recordToolCall } from "@/lib/tools/recordToolCall";
 
 /**
  * POST /api/tools/get_competing_bids
@@ -8,7 +9,16 @@ import { getCompetingBids } from "@/lib/tools/getCompetingBids";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
+    const b = body as Record<string, unknown>;
     const result = await getCompetingBids(body);
+
+    await recordToolCall({
+      session_id: (b.session_id as string) || undefined,
+      job_id: (b.job_id as string) || undefined,
+      tool_name: "get_competing_bids",
+      payload: { request: b, result },
+    });
+
     if (!result.ok) {
       const status = result.code === "JOB_NOT_FOUND" ? 404 : 400;
       return NextResponse.json(result, { status });

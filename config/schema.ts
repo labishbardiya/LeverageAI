@@ -56,6 +56,12 @@ export const VendorSchema = z.object({
 // Benchmarks & red flags
 // ---------------------------------------------------------------------------
 
+export const SourcedValueSchema = z.object({
+  value: z.number(),
+  source: z.string(),
+  retrieved: z.string(),
+});
+
 export const BenchmarkEntrySchema = z.object({
   label: z.string(),
   unit: z.string(),
@@ -66,6 +72,11 @@ export const BenchmarkEntrySchema = z.object({
   mid: z.number().optional(),
   high: z.number().optional(),
   currency: z.string().default("USD"),
+  /** Citation for negotiator speech + UI footnotes */
+  source: z.string().optional(),
+  retrieved: z.string().optional(),
+  notes: z.string().optional(),
+  citations: z.record(z.string(), SourcedValueSchema).optional(),
 });
 
 export const RedFlagSchema = z.object({

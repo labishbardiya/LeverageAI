@@ -45,3 +45,7 @@ export type {
   BridgePairIntent,
   ElevenLabsErrorBody,
 } from "./types";
+
+export { isLiveModeEnabled, liveModeStatus } from "./liveMode";
+export { runAgentBridge, runBridgesSequential } from "./bridge";
+export { fetchAndStoreRecording } from "./recordings";

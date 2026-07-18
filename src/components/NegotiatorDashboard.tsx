@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { JobColumn } from "./JobColumn";
 import { CallsColumn } from "./CallsColumn";
 import { DealColumn } from "./DealColumn";
+import { DiscoveryPanel } from "./DiscoveryPanel";
 import {
   emptySessions,
   initialJobState,
@@ -28,7 +29,12 @@ const POLL_MS = 1000;
 export function NegotiatorDashboard() {
   const searchParams = useSearchParams();
   const verticalId = (searchParams.get("vertical") || "hvac").toLowerCase();
-  const replay = searchParams.get("replay") === "true";
+  const replayParam = searchParams.get("replay");
+  const replay =
+    replayParam === "true" ||
+    replayParam === "live" ||
+    replayParam === "1";
+  const replayLive = replayParam === "live";
 
   const [vertical, setVertical] = useState<VerticalConfig | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -38,6 +44,7 @@ export function NegotiatorDashboard() {
     vendor_id: string;
     ts: number;
   } | null>(null);
+  const [showDiscovery, setShowDiscovery] = useState(false);
 
   const streamRef = useRef<StreamHandle | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -65,7 +72,10 @@ export function NegotiatorDashboard() {
         let evs = events;
         let spec = job_spec;
         if (!evs) {
-          const golden = await loadGoldenRun(cfg.id);
+          const golden = await loadGoldenRun(
+            cfg.id,
+            replayLive ? "live" : "default",
+          );
           evs = resolveGoldenEvents(golden);
           if (!spec || !Object.keys(spec).length) {
             spec = (golden?.job_spec as JobSpec) || job_spec;
@@ -83,7 +93,7 @@ export function NegotiatorDashboard() {
         );
       })();
     },
-    [stopPolling],
+    [stopPolling, replayLive],
   );
 
   const startPolling = useCallback(
@@ -180,6 +190,35 @@ export function NegotiatorDashboard() {
     );
   }, []);
 
+  const startSessions = useCallback(
+    async (jobId: string, spec: JobSpec) => {
+      if (!vertical) return;
+      setBusy(true);
+      try {
+        const startRes = await fetch("/api/sessions/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: jobId }),
+        });
+        if (!startRes.ok) throw new Error("start failed");
+
+        setShowDiscovery(false);
+        setState({
+          job_id: jobId,
+          phase: "calling",
+          job_spec: spec,
+          sessions: emptySessions(vertical),
+          ranked: [],
+        });
+        startPolling(jobId, vertical);
+      } catch {
+        setShowDiscovery(false);
+        startMock(vertical, spec);
+      }
+    },
+    [vertical, startPolling, startMock],
+  );
+
   const onConfirm = useCallback(async () => {
     if (!vertical || !state?.job_spec) return;
     setBusy(true);
@@ -192,7 +231,6 @@ export function NegotiatorDashboard() {
     }
 
     try {
-      // 1) Create job
       const createRes = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -211,30 +249,24 @@ export function NegotiatorDashboard() {
       const jobId = created.job?.id || created.job_id || created.id;
       if (!jobId) throw new Error("no job id");
 
-      // 2) Confirm
       const confirmRes = await fetch(`/api/jobs/${jobId}/confirm`, {
         method: "PATCH",
       });
       if (!confirmRes.ok) throw new Error("confirm failed");
 
-      // 3) Start 3 sessions
-      const startRes = await fetch("/api/sessions/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: jobId }),
-      });
-      if (!startRes.ok) throw new Error("start failed");
-
-      setState({
-        job_id: jobId,
-        phase: "calling",
-        job_spec: state.job_spec,
-        sessions: emptySessions(vertical),
-        ranked: [],
-      });
-      startPolling(jobId, vertical);
+      setState((prev) =>
+        prev
+          ? {
+              ...prev,
+              job_id: jobId,
+              phase: "confirmed",
+              job_spec: state.job_spec,
+            }
+          : prev,
+      );
+      setShowDiscovery(true);
+      setBusy(false);
     } catch {
-      // Live agents incomplete — golden mock so judges still see the flow
       startMock(vertical, state.job_spec);
     }
   }, [
@@ -242,7 +274,6 @@ export function NegotiatorDashboard() {
     state?.job_spec,
     replay,
     startMock,
-    startPolling,
     stopPolling,
   ]);
 
@@ -290,15 +321,19 @@ export function NegotiatorDashboard() {
         <div className="mx-auto flex max-w-[1600px] items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-sm font-bold text-white">
-              N
+              L
             </div>
             <div>
               <h1 className="text-base font-semibold leading-tight">
-                The Negotiator
+                LeverageAI
               </h1>
               <p className="text-xs text-slate-500">
                 {verticalTitle(vertical)}
-                {replay ? " · golden replay" : ""}
+                {replayLive
+                  ? " · live-run replay"
+                  : replay
+                    ? " · golden replay"
+                    : ""}
               </p>
             </div>
           </div>
@@ -307,7 +342,7 @@ export function NegotiatorDashboard() {
       </header>
 
       <main className="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 gap-6 p-6 lg:grid-cols-3 lg:gap-5 lg:min-h-0 lg:overflow-hidden">
-        <div className="min-h-0 lg:h-[calc(100vh-5.5rem)]">
+        <div className="min-h-0 space-y-4 lg:h-[calc(100vh-5.5rem)] lg:overflow-auto">
           <JobColumn
             vertical={vertical}
             phase={state.phase}
@@ -317,6 +352,16 @@ export function NegotiatorDashboard() {
             voiceAgentId={voiceAgentId}
             busy={busy}
           />
+          {showDiscovery && state.job_id && state.job_spec && (
+            <DiscoveryPanel
+              vertical={vertical}
+              zip={String(state.job_spec.zip || "28202")}
+              busy={busy}
+              onContinue={() =>
+                startSessions(state.job_id!, state.job_spec as JobSpec)
+              }
+            />
+          )}
         </div>
         <div className="min-h-0 lg:h-[calc(100vh-5.5rem)]">
           <CallsColumn
@@ -333,6 +378,8 @@ export function NegotiatorDashboard() {
             ranked={ranked}
             sessions={state.sessions}
             onListen={onListen}
+            replay={replay}
+            jobSpec={state.job_spec}
           />
         </div>
       </main>

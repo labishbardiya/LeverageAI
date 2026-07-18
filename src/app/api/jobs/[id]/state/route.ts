@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/db";
 import { loadVertical } from "@/lib/config/loadVertical";
 import { rankQuotes } from "@/lib/tools/rankQuotes";
+import { buildLeverageChain } from "@/lib/tools/leverageChain";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 /**
- * GET /api/jobs/[id]/state — full state for UI polling (job, sessions, quotes, transcripts, ranked)
+ * GET /api/jobs/[id]/state — full state for UI polling
  */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
@@ -17,10 +18,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    const [sessions, quotes, transcripts] = await Promise.all([
+    const [sessions, quotes, transcripts, tool_calls] = await Promise.all([
       store.listSessionsByJob(id),
       store.listQuotesByJob(id),
       store.listTranscriptsByJob(id, 300),
+      store.listToolCallsByJob(id),
     ]);
 
     let config;
@@ -30,13 +32,22 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       config = undefined;
     }
 
-    const ranked = rankQuotes(quotes, config, sessions);
+    const ranked = rankQuotes(quotes, config, sessions).map((r) => ({
+      ...r,
+      leverage_chain: buildLeverageChain({
+        session_id: r.session_id,
+        quotes,
+        tool_calls,
+        transcripts,
+      }),
+    }));
 
     return NextResponse.json({
       job,
       sessions,
       quotes,
       transcripts,
+      tool_calls,
       ranked,
       backend: store.backend,
     });

@@ -47,10 +47,12 @@
   "benchmark_used": {
     "label": "3-ton central AC replacement (installed)",
     "unit": "job",
-    "fair_low": 6000,
+    "fair_low": 5500,
     "fair_high": 9500,
     "currency": "USD",
-    "mid": 7750
+    "mid": 7500,
+    "source": "Angi/HomeAdvisor & Fixr 2026 cost guides",
+    "retrieved": "2026-07"
   },
   "red_flag_threshold": 0.3,
   "sessions": [
@@ -62,8 +64,16 @@
       "status": "completed",
       "outcome_type": "itemized_quote",
       "price_history": [
-        { "ts_ms": 45000, "total": 9400, "note": "opening highball" },
-        { "ts_ms": 92000, "total": 8900, "note": "minor concession on labor" },
+        {
+          "ts_ms": 45000,
+          "total": 9400,
+          "note": "opening highball"
+        },
+        {
+          "ts_ms": 92000,
+          "total": 8900,
+          "note": "minor concession on labor"
+        },
         {
           "ts_ms": 128000,
           "total": 7850,
@@ -73,7 +83,10 @@
       "quotes": [
         {
           "line_items": [
-            { "label": "3-ton package highball", "amount": 9400 }
+            {
+              "label": "3-ton package highball",
+              "amount": 9400
+            }
           ],
           "total": 9400,
           "notes": "Initial highball"
@@ -84,11 +97,26 @@
               "label": "3-ton condenser + air handler (installed equipment)",
               "amount": 4800
             },
-            { "label": "Labor & install", "amount": 2200 },
-            { "label": "Refrigerant charge", "amount": 250 },
-            { "label": "Permit", "amount": 200 },
-            { "label": "Haul-away old unit", "amount": 200 },
-            { "label": "Diagnostic (waived if install)", "amount": 200 }
+            {
+              "label": "Labor & install",
+              "amount": 2200
+            },
+            {
+              "label": "Refrigerant charge",
+              "amount": 250
+            },
+            {
+              "label": "Permit",
+              "amount": 200
+            },
+            {
+              "label": "Haul-away old unit",
+              "amount": 200
+            },
+            {
+              "label": "Diagnostic (waived if install)",
+              "amount": 200
+            }
           ],
           "total": 7850,
           "notes": "After competing bid cited"
@@ -104,11 +132,26 @@
             "label": "3-ton condenser + air handler (installed equipment)",
             "amount": 4800
           },
-          { "label": "Labor & install", "amount": 2200 },
-          { "label": "Refrigerant charge", "amount": 250 },
-          { "label": "Permit", "amount": 200 },
-          { "label": "Haul-away old unit", "amount": 200 },
-          { "label": "Diagnostic (waived if install)", "amount": 200 }
+          {
+            "label": "Labor & install",
+            "amount": 2200
+          },
+          {
+            "label": "Refrigerant charge",
+            "amount": 250
+          },
+          {
+            "label": "Permit",
+            "amount": 200
+          },
+          {
+            "label": "Haul-away old unit",
+            "amount": 200
+          },
+          {
+            "label": "Diagnostic (waived if install)",
+            "amount": 200
+          }
         ],
         "valid_until": "2026-07-26",
         "notes": "Final after competing-bid concession"
@@ -144,13 +187,13 @@
           "id": "t3",
           "ts_ms": 28000,
           "speaker": "vendor",
-          "text": "Hold on — am I talking to a robot? This sounds scripted."
+          "text": "Hold on \u2014 am I talking to a robot? This sounds scripted."
         },
         {
           "id": "t4",
           "ts_ms": 34000,
           "speaker": "negotiator",
-          "text": "Yes — I'm an AI voice assistant helping the homeowner gather comparable written quotes. I'll only use real numbers from this call and competing bids we've already logged. Happy to continue if that works for you."
+          "text": "Yes \u2014 I'm an AI voice assistant helping the homeowner gather comparable written quotes. I'll only use real numbers from this call and competing bids we've already logged. Happy to continue if that works for you."
         },
         {
           "id": "t5",
@@ -162,7 +205,7 @@
           "id": "t6",
           "ts_ms": 56000,
           "speaker": "negotiator",
-          "text": "Can you itemize that — equipment, labor, refrigerant, permit, and haul-away separately?"
+          "text": "Can you itemize that \u2014 equipment, labor, refrigerant, permit, and haul-away separately?"
         },
         {
           "id": "t7",
@@ -180,13 +223,13 @@
           "id": "t9",
           "ts_ms": 92000,
           "speaker": "vendor",
-          "text": "I can come off a bit on labor — call it eighty-nine hundred total if you book by Friday."
+          "text": "I can come off a bit on labor \u2014 call it eighty-nine hundred total if you book by Friday."
         },
         {
           "id": "t-cite-1",
           "ts_ms": 115000,
           "speaker": "negotiator",
-          "text": "I have a competing written bid already logged for this same job from ValueHVAC at four thousand six hundred eighty-nine dollars itemized. I'm not inventing that — it's on file for this job. Can Summit Air meet something closer to a fair mid-market install?"
+          "text": "I have a competing written bid already logged for this same job from ValueHVAC at $4689 itemized. I'm not inventing that \u2014 it's on file for this job. Can Summit Air meet something closer to a fair mid-market install?"
         },
         {
           "id": "t10",
@@ -199,6 +242,25 @@
           "ts_ms": 140000,
           "speaker": "negotiator",
           "text": "Thank you. Logging itemized quote total seven thousand eight hundred fifty dollars for Summit Air."
+        }
+      ],
+      "tool_calls": [
+        {
+          "id": "tc-bids-1",
+          "tool_name": "get_competing_bids",
+          "created_at": "2026-07-19T12:01:50.000Z",
+          "payload": {
+            "result": {
+              "ok": true,
+              "bids": [
+                {
+                  "id": "quote-value-1",
+                  "vendor_id": "upseller",
+                  "total": 4689
+                }
+              ]
+            }
+          }
         }
       ]
     },
@@ -255,7 +317,7 @@
           "id": "c5",
           "ts_ms": 50000,
           "speaker": "vendor",
-          "text": "Yes — have them call dispatch weekday mornings the next two business days. We'll book an estimate. No phone price today."
+          "text": "Yes \u2014 have them call dispatch weekday mornings the next two business days. We'll book an estimate. No phone price today."
         },
         {
           "id": "c6",
@@ -273,7 +335,11 @@
       "status": "completed",
       "outcome_type": "itemized_quote",
       "price_history": [
-        { "ts_ms": 22000, "total": 3999, "note": "lowball headline before fees" },
+        {
+          "ts_ms": 22000,
+          "total": 3999,
+          "note": "lowball headline before fees"
+        },
         {
           "ts_ms": 78000,
           "total": 4689,
@@ -283,11 +349,26 @@
       "quotes": [
         {
           "line_items": [
-            { "label": "3-ton unit package (promo base)", "amount": 3500 },
-            { "label": "Refrigerant", "amount": 450 },
-            { "label": "Permit", "amount": 300 },
-            { "label": "Haul-away", "amount": 250 },
-            { "label": "Diagnostic", "amount": 189 }
+            {
+              "label": "3-ton unit package (promo base)",
+              "amount": 3500
+            },
+            {
+              "label": "Refrigerant",
+              "amount": 450
+            },
+            {
+              "label": "Permit",
+              "amount": 300
+            },
+            {
+              "label": "Haul-away",
+              "amount": 250
+            },
+            {
+              "label": "Diagnostic",
+              "amount": 189
+            }
           ],
           "total": 4689,
           "notes": "Hidden fees itemized"
@@ -299,23 +380,39 @@
         "currency": "USD",
         "total": 4689,
         "line_items": [
-          { "label": "3-ton unit package (promo base)", "amount": 3500 },
-          { "label": "Refrigerant", "amount": 450 },
-          { "label": "Permit", "amount": 300 },
-          { "label": "Haul-away", "amount": 250 },
-          { "label": "Diagnostic", "amount": 189 }
+          {
+            "label": "3-ton unit package (promo base)",
+            "amount": 3500
+          },
+          {
+            "label": "Refrigerant",
+            "amount": 450
+          },
+          {
+            "label": "Permit",
+            "amount": 300
+          },
+          {
+            "label": "Haul-away",
+            "amount": 250
+          },
+          {
+            "label": "Diagnostic",
+            "amount": 189
+          }
         ],
         "valid_until": "2026-07-22",
-        "notes": "Headline low; hidden fees surfaced as itemized lines"
+        "notes": "Headline low; hidden fees surfaced as itemized lines",
+        "red_flag": true
       },
       "red_flag": true,
-      "red_flag_reason": "Total $4689 is ≥30% below benchmark mid $7750 for ac_replacement_3ton (threshold 0.30 → flag if ≤ $5425)",
+      "red_flag_reason": "Total $4689 is \u226530% below benchmark mid $7750 for ac_replacement_3ton (threshold 0.30 \u2192 flag if \u2264 $5425)",
       "transcript_events": [
         {
           "id": "v0",
           "ts_ms": 0,
           "speaker": "negotiator",
-          "text": "Hi ValueHVAC — homeowner needs a full 3-ton central AC replacement install quote, ZIP 28202, this week."
+          "text": "Hi ValueHVAC \u2014 homeowner needs a full 3-ton central AC replacement install quote, ZIP 28202, this week."
         },
         {
           "id": "v1",
@@ -426,7 +523,10 @@
     {
       "ts_ms": 0,
       "type": "job_confirmed",
-      "payload": { "vertical": "hvac", "job_kind": "ac_replacement_3ton" }
+      "payload": {
+        "vertical": "hvac",
+        "job_kind": "ac_replacement_3ton"
+      }
     },
     {
       "ts_ms": 1000,
@@ -488,10 +588,76 @@
     }
   ],
   "acceptance_notes": [
-    "Tough (Summit Air) price moves 9400→7850 after real competing bid cited",
+    "Tough (Summit Air) price moves 9400\u21927850 after real competing bid cited",
     "Stonewaller (ComfortPro) ends documented_decline with callback",
     "Upseller (ValueHVAC) hidden fees itemized (refrigerant 450, permit 300, haul-away 250, diagnostic 189)",
-    "Red-flag: ValueHVAC total 4689 is ≥30% below benchmark mid 7750",
+    "Red-flag: ValueHVAC total 4689 is \u226530% below benchmark mid 7750",
     "AI disclosure when asked 'am I talking to a robot?'"
-  ]
+  ],
+  "tool_calls": [
+    {
+      "id": "tc-bids-1",
+      "session_id": "session-summit-tough",
+      "job_id": "job-golden-hvac",
+      "tool_name": "get_competing_bids",
+      "created_at": "2026-07-19T12:01:00.000Z",
+      "payload": {
+        "result": {
+          "ok": true,
+          "bids": [
+            {
+              "id": "quote-value-1",
+              "vendor_id": "upseller",
+              "total": 4689
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tc-log-1",
+      "session_id": "session-summit-tough",
+      "job_id": "job-golden-hvac",
+      "tool_name": "log_quote",
+      "created_at": "2026-07-19T12:02:20.000Z",
+      "payload": {
+        "result": {
+          "ok": true,
+          "total": 7850
+        }
+      }
+    }
+  ],
+  "job_id": "job-golden-hvac",
+  "voice_intake_spec": {
+    "system_type": "central_ac",
+    "system_age_years": 14,
+    "tonnage": 3,
+    "home_sqft": 1800,
+    "symptom": "not_cooling",
+    "ductwork": "unknown",
+    "urgency": "this_week",
+    "zip": "28202",
+    "notes": "Compressor failing; homeowner wants full 3-ton central AC replacement quote, installed.",
+    "job_kind": "ac_replacement_3ton",
+    "job_type": "ac_replacement_3ton"
+  },
+  "document_intake_spec": {
+    "system_type": "central_ac",
+    "system_age_years": 14,
+    "tonnage": 3,
+    "home_sqft": 1800,
+    "symptom": "not_cooling",
+    "ductwork": "unknown",
+    "urgency": "this_week",
+    "zip": "28202",
+    "notes": "Compressor failing; homeowner wants full 3-ton central AC replacement quote, installed.",
+    "job_kind": "ac_replacement_3ton",
+    "job_type": "ac_replacement_3ton"
+  },
+  "watchdog_timeout_session": {
+    "outcome_type": "documented_decline",
+    "callback_window": "timeout: no events for 90s",
+    "reason": "timeout"
+  }
 }

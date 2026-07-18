@@ -9,6 +9,7 @@ import type {
   Quote,
   Session,
   TranscriptEvent,
+  ToolCallRecord,
 } from "@/lib/types";
 import { getPool } from "./pool";
 import type {
@@ -16,6 +17,7 @@ import type {
   CreateJobInput,
   CreateQuoteInput,
   CreateSessionInput,
+  CreateToolCallInput,
   DataStore,
 } from "./store";
 
@@ -29,7 +31,8 @@ function mapJob(row: Record<string, unknown>): Job {
   return {
     id: String(row.id),
     vertical: String(row.vertical),
-    job_spec: (row.job_spec as JobSpec) ?? { job_type: "unknown" },
+    job_spec: (row.job_spec as JobSpec) ?? {},
+    frozen_job_spec: (row.frozen_job_spec as JobSpec | null) ?? null,
     status: row.status as Job["status"],
     confirmed: Boolean(row.confirmed),
     created_at: new Date(String(row.created_at)).toISOString(),
@@ -45,7 +48,23 @@ function mapSession(row: Record<string, unknown>): Session {
     status: row.status as Session["status"],
     outcome_type: (row.outcome_type as OutcomeType | null) ?? null,
     current_total: num(row.current_total),
-    callback_window: row.callback_window != null ? String(row.callback_window) : null,
+    callback_window:
+      row.callback_window != null ? String(row.callback_window) : null,
+    negotiator_conversation_id:
+      row.negotiator_conversation_id != null
+        ? String(row.negotiator_conversation_id)
+        : null,
+    counter_conversation_id:
+      row.counter_conversation_id != null
+        ? String(row.counter_conversation_id)
+        : null,
+    audio_url: row.audio_url != null ? String(row.audio_url) : null,
+    recording_note:
+      row.recording_note != null ? String(row.recording_note) : null,
+    last_event_at:
+      row.last_event_at != null
+        ? new Date(String(row.last_event_at)).toISOString()
+        : null,
     created_at: new Date(String(row.created_at)).toISOString(),
     updated_at: new Date(String(row.updated_at)).toISOString(),
   };
@@ -77,6 +96,17 @@ function mapTranscript(row: Record<string, unknown>): TranscriptEvent {
   };
 }
 
+function mapToolCall(row: Record<string, unknown>): ToolCallRecord {
+  return {
+    id: String(row.id),
+    session_id: String(row.session_id),
+    job_id: row.job_id != null ? String(row.job_id) : null,
+    tool_name: String(row.tool_name),
+    payload: (row.payload as Record<string, unknown>) ?? {},
+    created_at: new Date(String(row.created_at)).toISOString(),
+  };
+}
+
 export class PostgresStore implements DataStore {
   readonly backend = "postgres" as const;
 
@@ -99,7 +129,9 @@ export class PostgresStore implements DataStore {
 
   async updateJob(
     id: string,
-    patch: Partial<Pick<Job, "job_spec" | "status" | "confirmed">>
+    patch: Partial<
+      Pick<Job, "job_spec" | "status" | "confirmed" | "frozen_job_spec">
+    >
   ): Promise<Job | null> {
     const existing = await this.getJob(id);
     if (!existing) return null;
@@ -111,26 +143,45 @@ export class PostgresStore implements DataStore {
     const status = patch.status ?? existing.status;
     const confirmed =
       patch.confirmed !== undefined ? patch.confirmed : existing.confirmed;
+    const frozen =
+      patch.frozen_job_spec !== undefined
+        ? patch.frozen_job_spec
+        : existing.frozen_job_spec;
 
     const pool = getPool();
     const { rows } = await pool.query(
       `UPDATE jobs
-       SET job_spec = $2::jsonb, status = $3, confirmed = $4
+       SET job_spec = $2::jsonb,
+           status = $3,
+           confirmed = $4,
+           frozen_job_spec = $5::jsonb
        WHERE id = $1
        RETURNING *`,
-      [id, JSON.stringify(job_spec), status, confirmed]
+      [
+        id,
+        JSON.stringify(job_spec),
+        status,
+        confirmed,
+        frozen ? JSON.stringify(frozen) : null,
+      ]
     );
     return rows[0] ? mapJob(rows[0]) : null;
   }
 
   async confirmJob(id: string): Promise<Job | null> {
+    const existing = await this.getJob(id);
+    if (!existing) return null;
     const pool = getPool();
+    const frozen = existing.frozen_job_spec ?? existing.job_spec;
     const { rows } = await pool.query(
       `UPDATE jobs
-       SET confirmed = true, status = 'confirmed'
+       SET confirmed = true,
+           status = 'confirmed',
+           frozen_job_spec = $2::jsonb,
+           job_spec = $2::jsonb
        WHERE id = $1
        RETURNING *`,
-      [id]
+      [id, JSON.stringify(frozen)]
     );
     return rows[0] ? mapJob(rows[0]) : null;
   }
@@ -138,8 +189,8 @@ export class PostgresStore implements DataStore {
   async createSession(input: CreateSessionInput): Promise<Session> {
     const pool = getPool();
     const { rows } = await pool.query(
-      `INSERT INTO sessions (job_id, vendor_id, vendor_name, status)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO sessions (job_id, vendor_id, vendor_name, status, last_event_at)
+       VALUES ($1, $2, $3, $4, now())
        RETURNING *`,
       [
         input.job_id,
@@ -173,26 +224,54 @@ export class PostgresStore implements DataStore {
     patch: Partial<
       Pick<
         Session,
-        "status" | "outcome_type" | "current_total" | "callback_window"
+        | "status"
+        | "outcome_type"
+        | "current_total"
+        | "callback_window"
+        | "negotiator_conversation_id"
+        | "counter_conversation_id"
+        | "audio_url"
+        | "recording_note"
+        | "last_event_at"
       >
     >
   ): Promise<Session | null> {
     const existing = await this.getSession(id);
     if (!existing) return null;
 
-    const status = patch.status ?? existing.status;
-    const outcome_type =
-      patch.outcome_type !== undefined
-        ? patch.outcome_type
-        : existing.outcome_type;
-    const current_total =
-      patch.current_total !== undefined
-        ? patch.current_total
-        : existing.current_total;
-    const callback_window =
-      patch.callback_window !== undefined
-        ? patch.callback_window
-        : existing.callback_window;
+    const next = {
+      status: patch.status ?? existing.status,
+      outcome_type:
+        patch.outcome_type !== undefined
+          ? patch.outcome_type
+          : existing.outcome_type,
+      current_total:
+        patch.current_total !== undefined
+          ? patch.current_total
+          : existing.current_total,
+      callback_window:
+        patch.callback_window !== undefined
+          ? patch.callback_window
+          : existing.callback_window,
+      negotiator_conversation_id:
+        patch.negotiator_conversation_id !== undefined
+          ? patch.negotiator_conversation_id
+          : existing.negotiator_conversation_id,
+      counter_conversation_id:
+        patch.counter_conversation_id !== undefined
+          ? patch.counter_conversation_id
+          : existing.counter_conversation_id,
+      audio_url:
+        patch.audio_url !== undefined ? patch.audio_url : existing.audio_url,
+      recording_note:
+        patch.recording_note !== undefined
+          ? patch.recording_note
+          : existing.recording_note,
+      last_event_at:
+        patch.last_event_at !== undefined
+          ? patch.last_event_at
+          : existing.last_event_at,
+    };
 
     const pool = getPool();
     const { rows } = await pool.query(
@@ -201,10 +280,26 @@ export class PostgresStore implements DataStore {
            outcome_type = $3,
            current_total = $4,
            callback_window = $5,
+           negotiator_conversation_id = $6,
+           counter_conversation_id = $7,
+           audio_url = $8,
+           recording_note = $9,
+           last_event_at = COALESCE($10::timestamptz, last_event_at),
            updated_at = now()
        WHERE id = $1
        RETURNING *`,
-      [id, status, outcome_type, current_total, callback_window]
+      [
+        id,
+        next.status,
+        next.outcome_type,
+        next.current_total,
+        next.callback_window,
+        next.negotiator_conversation_id,
+        next.counter_conversation_id,
+        next.audio_url,
+        next.recording_note,
+        next.last_event_at,
+      ]
     );
     return rows[0] ? mapSession(rows[0]) : null;
   }
@@ -230,7 +325,7 @@ export class PostgresStore implements DataStore {
       );
       await client.query(
         `UPDATE sessions
-         SET current_total = $2, updated_at = now()
+         SET current_total = $2, last_event_at = now(), updated_at = now()
          WHERE id = $1`,
         [input.session_id, input.total]
       );
@@ -280,6 +375,10 @@ export class PostgresStore implements DataStore {
        RETURNING *`,
       [input.session_id, input.ts_ms, input.speaker, input.text]
     );
+    await pool.query(
+      `UPDATE sessions SET last_event_at = now(), updated_at = now() WHERE id = $1`,
+      [input.session_id]
+    );
     return mapTranscript(rows[0]);
   }
 
@@ -325,5 +424,43 @@ export class PostgresStore implements DataStore {
       outcome_type,
       callback_window: callback_window ?? null,
     });
+  }
+
+  async createToolCall(input: CreateToolCallInput): Promise<ToolCallRecord> {
+    const pool = getPool();
+    const { rows } = await pool.query(
+      `INSERT INTO tool_calls (session_id, job_id, tool_name, payload)
+       VALUES ($1, $2, $3, $4::jsonb)
+       RETURNING *`,
+      [
+        input.session_id,
+        input.job_id ?? null,
+        input.tool_name,
+        JSON.stringify(input.payload),
+      ]
+    );
+    await pool.query(
+      `UPDATE sessions SET last_event_at = now(), updated_at = now() WHERE id = $1`,
+      [input.session_id]
+    );
+    return mapToolCall(rows[0]);
+  }
+
+  async listToolCallsBySession(session_id: string): Promise<ToolCallRecord[]> {
+    const pool = getPool();
+    const { rows } = await pool.query(
+      `SELECT * FROM tool_calls WHERE session_id = $1 ORDER BY created_at ASC`,
+      [session_id]
+    );
+    return rows.map(mapToolCall);
+  }
+
+  async listToolCallsByJob(job_id: string): Promise<ToolCallRecord[]> {
+    const pool = getPool();
+    const { rows } = await pool.query(
+      `SELECT * FROM tool_calls WHERE job_id = $1 ORDER BY created_at ASC`,
+      [job_id]
+    );
+    return rows.map(mapToolCall);
   }
 }

@@ -1,0 +1,45 @@
+{
+  "vertical": "hvac",
+  "zip": "28202",
+  "query": "HVAC contractor near 28202",
+  "retrieved": "2026-07",
+  "source": "Google Places API (Text Search) — snapshot for offline demo",
+  "note": "Phones redacted (last 4 digits masked). In production these are the numbers dialed via ElevenLabs native Twilio integration.",
+  "places": [
+    {
+      "displayName": "Carrier Enterprise of the Carolinas",
+      "rating": 4.5,
+      "userRatingCount": 128,
+      "nationalPhoneNumber": "+1 (704) 555-01••",
+      "formattedAddress": "Charlotte, NC 28202 area"
+    },
+    {
+      "displayName": "One Hour Heating & Air Conditioning of Charlotte",
+      "rating": 4.7,
+      "userRatingCount": 412,
+      "nationalPhoneNumber": "+1 (704) 555-02••",
+      "formattedAddress": "Charlotte, NC"
+    },
+    {
+      "displayName": "Holmes Distributing / Local HVAC Partners",
+      "rating": 4.4,
+      "userRatingCount": 89,
+      "nationalPhoneNumber": "+1 (704) 555-03••",
+      "formattedAddress": "Charlotte metro"
+    },
+    {
+      "displayName": "Service Experts Heating & Air Conditioning",
+      "rating": 4.2,
+      "userRatingCount": 256,
+      "nationalPhoneNumber": "+1 (704) 555-04••",
+      "formattedAddress": "Charlotte, NC"
+    },
+    {
+      "displayName": "ARSrescue Rooter Heating & Air",
+      "rating": 4.3,
+      "userRatingCount": 301,
+      "nationalPhoneNumber": "+1 (704) 555-05••",
+      "formattedAddress": "Charlotte, NC"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import type {
   SessionStatus,
   TranscriptEvent,
   LineItem,
+  ToolCallRecord,
 } from "@/lib/types";
 
 export interface CreateJobInput {
@@ -40,9 +41,15 @@ export interface AppendTranscriptInput {
   text: string;
 }
 
+export interface CreateToolCallInput {
+  session_id: string;
+  job_id?: string | null;
+  tool_name: string;
+  payload: Record<string, unknown>;
+}
+
 /**
  * Unified data access for Postgres and in-memory backends.
- * All tool handlers and API routes go through this interface.
  */
 export interface DataStore {
   readonly backend: "postgres" | "memory";
@@ -51,7 +58,9 @@ export interface DataStore {
   getJob(id: string): Promise<Job | null>;
   updateJob(
     id: string,
-    patch: Partial<Pick<Job, "job_spec" | "status" | "confirmed">>
+    patch: Partial<
+      Pick<Job, "job_spec" | "status" | "confirmed" | "frozen_job_spec">
+    >
   ): Promise<Job | null>;
   confirmJob(id: string): Promise<Job | null>;
 
@@ -63,7 +72,15 @@ export interface DataStore {
     patch: Partial<
       Pick<
         Session,
-        "status" | "outcome_type" | "current_total" | "callback_window"
+        | "status"
+        | "outcome_type"
+        | "current_total"
+        | "callback_window"
+        | "negotiator_conversation_id"
+        | "counter_conversation_id"
+        | "audio_url"
+        | "recording_note"
+        | "last_event_at"
       >
     >
   ): Promise<Session | null>;
@@ -90,4 +107,8 @@ export interface DataStore {
     outcome_type: OutcomeType,
     callback_window?: string | null
   ): Promise<Session | null>;
+
+  createToolCall(input: CreateToolCallInput): Promise<ToolCallRecord>;
+  listToolCallsBySession(session_id: string): Promise<ToolCallRecord[]>;
+  listToolCallsByJob(job_id: string): Promise<ToolCallRecord[]>;
 }

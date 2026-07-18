@@ -27,6 +27,12 @@ export type StoreEvent =
       job_id: string;
       session_id?: string;
       payload: unknown;
+    }
+  | {
+      type: "tool";
+      job_id: string;
+      session_id: string;
+      payload: unknown;
     };
 
 type Listener = (event: StoreEvent) => void;

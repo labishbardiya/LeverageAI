@@ -50,17 +50,39 @@ npx tsx scripts/smoke-tools.ts   # tool honesty + ranking smoke
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `ELEVENLABS_API_KEY` | For live voice | ElevenLabs API |
-| `ELEVENLABS_INTAKE_AGENT_ID` | Live intake | Agent #1 |
-| `ELEVENLABS_NEGOTIATOR_AGENT_ID` | Live calls | Agent #2 |
-| `ELEVENLABS_TOUGH_AGENT_ID` | Live calls | Counter-agent #3 (Summit Air) |
-| `ELEVENLABS_STONEWALLER_AGENT_ID` | Live calls | Counter-agent #4 (ComfortPro) |
-| `ELEVENLABS_UPSELLER_AGENT_ID` | Live calls | Counter-agent #5 (ValueHVAC) |
-| `NEXT_PUBLIC_ELEVENLABS_INTAKE_AGENT_ID` | Browser mic | Same as intake id if widget used client-side |
-| `DATABASE_URL` | Optional | Neon Postgres; **in-memory fallback** if unset |
+| `ELEVENLABS_API_KEY` | Live voice / provision | ElevenLabs API |
+| `ELEVENLABS_INTAKE_AGENT_ID` | Live | Agent #1 |
+| `ELEVENLABS_NEGOTIATOR_AGENT_ID` | Live | Agent #2 |
+| `ELEVENLABS_TOUGH_AGENT_ID` | Live | Counter #3 |
+| `ELEVENLABS_STONEWALLER_AGENT_ID` | Live | Counter #4 |
+| `ELEVENLABS_UPSELLER_AGENT_ID` | Live | Counter #5 |
+| `APP_BASE_URL` | Provision webhooks | Public origin (ngrok/prod) |
+| `NEXT_PUBLIC_ELEVENLABS_INTAKE_AGENT_ID` | Browser mic | Optional |
+| `DATABASE_URL` | Optional | Neon Postgres; **in-memory** if unset |
+| `GOOGLE_PLACES_API_KEY` | Optional | Live discovery; offline snapshots otherwise |
+| `XAI_API_KEY` | Optional | Document vision intake; heuristics otherwise |
+| `BLOB_READ_WRITE_TOKEN` | Optional | Recording blob storage |
 | `NEXT_PUBLIC_DEFAULT_VERTICAL` | Optional | Default `hvac` |
 
 Never commit secrets. Use `.env.local` (gitignored).
+
+### Provision agents
+
+```bash
+export ELEVENLABS_API_KEY=...
+export APP_BASE_URL=https://your-ngrok-or-host
+npm run provision   # primary path — see agents/SETUP.md
+```
+
+### Live mode vs replay
+
+- **Live** only when all 5 agent IDs + `ELEVENLABS_API_KEY` are set → sequential WebSocket bridges (`src/lib/elevenlabs/bridge.ts`).
+- **`?replay=true`** — offline golden insurance (zero env).
+- **`?replay=live`** — offline replay of `data/golden/live-run.json` (tool-log + leverage structure).
+
+### Production telephony path
+
+Real PSTN is a **chosen-not-built** decision for the MVP. See `src/lib/telephony/twilio.ts` (`NOT_ENABLED` guard). ElevenLabs supports native Twilio/SIP; Places discovery shows where the call list comes from; counter-agents stand in for negotiation styles (brief-allowed).
 
 ---
 
@@ -156,8 +178,9 @@ To “record” a live run later: export job state JSON into the same shape as `
 |---------|---------|
 | `npm run dev` | Local app |
 | `npm run build` | Production build |
-| `npm run eval` | Golden-run assertions |
-| `npx tsx scripts/smoke-tools.ts` | Tool + ranking smoke |
+| `npm run eval` | 12 acceptance assertions |
+| `npm run smoke` | Tool + ranking smoke |
+| `npm run provision` | Create/update 5 ElevenLabs agents |
 
 ---
 
