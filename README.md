@@ -84,6 +84,19 @@ npm run provision   # primary path — see agents/SETUP.md
 
 Real PSTN is a **chosen-not-built** decision for the MVP. See `src/lib/telephony/twilio.ts` (`NOT_ENABLED` guard). ElevenLabs supports native Twilio/SIP; Places discovery shows where the call list comes from; counter-agents stand in for negotiation styles (brief-allowed).
 
+### Live sessions (non-blocking)
+
+`POST /api/sessions/start` returns immediately with `{ live: true, status: "bridging" }` and runs agent↔agent bridges **in the background**. Poll `GET /api/jobs/:id/state` or SSE `/api/events` — sessions move `connecting` → `live` → `closed`.
+
+### Production deploy checklist (Vercel + Neon)
+
+1. **Neon:** create project → run `scripts/migrate.sql` → set `DATABASE_URL` (required on serverless).
+2. **Vercel:** import repo → set env vars → deploy → stable URL.
+3. Set `APP_BASE_URL=https://your-app.vercel.app` and `TOOLS_WEBHOOK_SECRET=...`.
+4. `npm run provision` once so agent webhooks point at the stable URL + secret headers.
+5. Optional: `BLOB_READ_WRITE_TOKEN` for call audio on Vercel.
+6. Stage pitch still uses `?replay=true` (zero env).
+
 ---
 
 ## Create the 5 ElevenLabs agents (human parallel track)

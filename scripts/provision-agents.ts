@@ -108,6 +108,13 @@ function buildWebhookTool(
     properties: {},
   }) as Record<string, unknown>;
 
+  const secret = process.env.TOOLS_WEBHOOK_SECRET?.trim();
+  const request_headers: Record<string, string> = {};
+  if (secret) {
+    request_headers["Authorization"] = `Bearer ${secret}`;
+    request_headers["x-leverageai-secret"] = secret;
+  }
+
   return {
     type: "webhook",
     name: toolName,
@@ -119,6 +126,9 @@ function buildWebhookTool(
       method: "POST",
       content_type: "application/json",
       request_body_schema: params,
+      ...(Object.keys(request_headers).length
+        ? { request_headers }
+        : {}),
     },
   };
 }

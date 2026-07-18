@@ -3,12 +3,15 @@ import { logQuote } from "@/lib/tools/logQuote";
 import { getStore } from "@/lib/db";
 import { publish } from "@/lib/db/events";
 import { recordToolCall } from "@/lib/tools/recordToolCall";
+import { requireToolWebhookAuth } from "@/lib/security/webhookAuth";
 
 /**
  * POST /api/tools/log_quote
  * Server-side honesty: validates schema, session/job linkage, total vs line items, red_flag.
  */
 export async function POST(req: NextRequest) {
+  const unauthorized = requireToolWebhookAuth(req);
+  if (unauthorized) return unauthorized;
   try {
     const body = await req.json().catch(() => ({}));
     const b = body as Record<string, unknown>;

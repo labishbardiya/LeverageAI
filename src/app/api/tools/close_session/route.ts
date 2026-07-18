@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { closeSession } from "@/lib/tools/closeSession";
 import { publish } from "@/lib/db/events";
 import { recordToolCall } from "@/lib/tools/recordToolCall";
+import { requireToolWebhookAuth } from "@/lib/security/webhookAuth";
 
 /**
  * POST /api/tools/close_session
  * outcome_type ∈ itemized_quote | callback_commitment | documented_decline
  */
 export async function POST(req: NextRequest) {
+  const unauthorized = requireToolWebhookAuth(req);
+  if (unauthorized) return unauthorized;
   try {
     const body = await req.json().catch(() => ({}));
     const b = body as Record<string, unknown>;

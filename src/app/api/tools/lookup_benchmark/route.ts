@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { lookupBenchmark } from "@/lib/tools/lookupBenchmark";
 import { recordToolCall } from "@/lib/tools/recordToolCall";
+import { requireToolWebhookAuth } from "@/lib/security/webhookAuth";
 
 /**
  * POST /api/tools/lookup_benchmark
  * Benchmark ranges from /config/verticals only — includes source citation.
  */
 export async function POST(req: NextRequest) {
+  const unauthorized = requireToolWebhookAuth(req);
+  if (unauthorized) return unauthorized;
   try {
     const body = await req.json().catch(() => ({}));
     const b = body as Record<string, unknown>;

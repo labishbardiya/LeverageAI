@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCompetingBids } from "@/lib/tools/getCompetingBids";
 import { recordToolCall } from "@/lib/tools/recordToolCall";
+import { requireToolWebhookAuth } from "@/lib/security/webhookAuth";
 
 /**
  * POST /api/tools/get_competing_bids
  * Returns ONLY real DB quotes for the job — never invented.
  */
 export async function POST(req: NextRequest) {
+  const unauthorized = requireToolWebhookAuth(req);
+  if (unauthorized) return unauthorized;
   try {
     const body = await req.json().catch(() => ({}));
     const b = body as Record<string, unknown>;
