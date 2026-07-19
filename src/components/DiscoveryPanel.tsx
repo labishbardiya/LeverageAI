@@ -110,10 +110,10 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">
+                      <p className="text-sm font-semibold text-[var(--glass-text)]">
                         #{i + 1} {p.displayName}
                       </p>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-[var(--glass-text-muted)]">
                         {p.rating != null ? `★ ${p.rating}` : "—"}
                         {p.userRatingCount != null
                           ? ` · ${p.userRatingCount} reviews`
@@ -125,21 +125,23 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
                           : ""}
                       </p>
                       {p.formattedAddress && (
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[11px] text-[var(--glass-text-muted)]">
                           {p.formattedAddress}
                         </p>
                       )}
-                      <p className="text-[11px] text-slate-600">
+                      <p className="text-[11px] text-[var(--glass-text-secondary)]">
                         {p.nationalPhoneNumber || "phone redacted / unknown"}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold tabular-nums text-emerald-700">
+                      <p className="text-lg font-bold tabular-nums text-white">
                         {p.provider_score != null
                           ? Math.round(p.provider_score)
                           : "—"}
                       </p>
-                      <p className="text-[10px] text-slate-400">score</p>
+                      <p className="text-[10px] text-[var(--glass-text-muted)]">
+                        score
+                      </p>
                     </div>
                   </div>
                   {p.score_breakdown && (
@@ -148,18 +150,18 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
                         .filter((c) => c.weight > 0)
                         .map((c) => (
                           <div key={c.key} className="flex items-center gap-2">
-                            <span className="w-4 text-[10px] font-medium text-slate-500">
+                            <span className="w-4 text-[10px] font-medium text-[var(--glass-text-muted)]">
                               {c.key}
                             </span>
-                            <div className="h-1.5 flex-1 rounded-full bg-slate-100">
+                            <div className="h-1.5 flex-1 rounded-full bg-white/15">
                               <div
-                                className="h-1.5 rounded-full bg-emerald-500"
+                                className="h-1.5 rounded-full bg-white/75"
                                 style={{
                                   width: `${Math.min(100, c.value * 100)}%`,
                                 }}
                               />
                             </div>
-                            <span className="w-8 text-right text-[10px] tabular-nums text-slate-500">
+                            <span className="w-8 text-right text-[10px] tabular-nums text-[var(--glass-text-muted)]">
                               {Math.round(c.points)}
                             </span>
                           </div>
@@ -172,7 +174,7 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
                         href={p.websiteUri}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-emerald-700 hover:underline"
+                        className="text-white/85 underline-offset-2 hover:underline"
                       >
                         Website
                       </a>
@@ -182,16 +184,19 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
                         href={p.googleMapsUri}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-emerald-700 hover:underline"
+                        className="text-white/85 underline-offset-2 hover:underline"
                       >
                         View on Google Maps
                       </a>
                     )}
                   </div>
                   {p.reviews && p.reviews.length > 0 && (
-                    <ul className="mt-2 space-y-1 border-t border-slate-50 pt-2">
+                    <ul className="mt-2 space-y-1 border-t border-white/10 pt-2">
                       {p.reviews.slice(0, 2).map((r, ri) => (
-                        <li key={ri} className="text-[11px] text-slate-600">
+                        <li
+                          key={ri}
+                          className="text-[11px] text-[var(--glass-text-secondary)]"
+                        >
                           “{r.text.slice(0, 120)}
                           {r.text.length > 120 ? "…" : ""}” — {r.author}
                         </li>
@@ -203,8 +208,8 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
             </ul>
           </div>
 
-          <details className="text-xs text-slate-500">
-            <summary className="cursor-pointer font-medium">
+          <details className="text-xs text-[var(--glass-text-muted)]">
+            <summary className="cursor-pointer font-medium text-[var(--glass-text-secondary)]">
               All {places.length} providers
             </summary>
             <ul className="mt-2 max-h-32 space-y-1 overflow-auto">

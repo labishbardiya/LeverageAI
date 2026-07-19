@@ -42,6 +42,10 @@
         "type": "object",
         "required": ["vertical", "confirmed", "symptom", "zip"],
         "properties": {
+          "intake_id": {
+            "type": "string",
+            "description": "Optional UUID from dynamic variable intake_id — targets the open browser form. If omitted, server fills the latest pending draft for this vertical."
+          },
           "vertical": {
             "type": "string",
             "description": "Vertical id from config (e.g. hvac, movers)."
@@ -98,6 +102,7 @@
             "description": "Confirmed job_spec payload",
             "required": ["vertical", "confirmed", "symptom", "zip"],
             "properties": {
+              "intake_id": { "type": "string", "description": "Optional draft UUID so the open form updates" },
               "vertical": { "type": "string", "description": "Vertical id (hvac, movers, ...)" },
               "system_type": { "type": "string", "description": "System type string" },
               "tonnage": { "type": "number", "description": "Tonnage if known" },

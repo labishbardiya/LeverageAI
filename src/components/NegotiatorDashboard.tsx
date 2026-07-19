@@ -96,31 +96,45 @@ export function NegotiatorDashboard() {
       });
 
       void (async () => {
-        let evs = events;
-        let spec = job_spec;
-        if (!evs) {
-          const golden = await loadGoldenRun(
-            cfg.id,
-            replayLive ? "live" : "default",
-          );
-          evs = resolveGoldenEvents(golden);
-          if (!spec || !Object.keys(spec).length) {
-            spec = (golden?.job_spec as JobSpec) || job_spec;
-          }
-        }
-
-        streamRef.current = playMockStream(
-          evs,
-          cfg,
-          (next) => {
-            setState(next);
-            if (next.phase === "complete") {
-              setBusy(false);
-              setBanner(null);
+        try {
+          let evs = events;
+          let spec = job_spec;
+          if (!evs) {
+            const golden = await loadGoldenRun(
+              cfg.id,
+              replayLive ? "live" : "default",
+            );
+            evs = resolveGoldenEvents(golden);
+            if (!spec || !Object.keys(spec).length) {
+              spec = (golden?.job_spec as JobSpec) || job_spec;
             }
-          },
-          { speed: 1.6, job_spec: spec },
-        );
+          }
+          if (!evs?.length) {
+            evs = resolveGoldenEvents(null);
+          }
+
+          streamRef.current = playMockStream(
+            evs,
+            cfg,
+            (next) => {
+              setState(next);
+              if (next.phase === "complete") {
+                setBusy(false);
+                setBanner(null);
+              }
+            },
+            { speed: 1.6, job_spec: spec },
+          );
+        } catch {
+          // Never leave Confirm/busy stuck if golden load fails mid-flight
+          setBusy(false);
+          setBanner("Stream failed — retry Confirm or open ?replay=true");
+          setState((prev) =>
+            prev
+              ? { ...prev, phase: "draft" }
+              : initialJobState(cfg),
+          );
+        }
       })();
     },
     [stopPolling, replayLive, replay],
@@ -129,6 +143,8 @@ export function NegotiatorDashboard() {
   const startPolling = useCallback(
     (jobId: string, cfg: VerticalConfig) => {
       stopPolling();
+      const startedAt = Date.now();
+      let lastRekickAt = 0;
       const tick = async () => {
         try {
           const res = await fetch(`/api/jobs/${jobId}/state`, {
@@ -144,6 +160,29 @@ export function NegotiatorDashboard() {
             setBusy(false);
             setBanner("Negotiations complete — ranked deals ready");
             setTimeout(() => setBanner(null), 4000);
+            return;
+          }
+          // If serverless simulate was killed mid-run, re-POST start to resume
+          // remaining tracks (server is idempotent / per-session).
+          const elapsed = Date.now() - startedAt;
+          const sinceRekick = Date.now() - lastRekickAt;
+          if (
+            elapsed > 14_000 &&
+            sinceRekick > 14_000 &&
+            normalized.phase === "calling"
+          ) {
+            lastRekickAt = Date.now();
+            void fetch("/api/sessions/start", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                job_id: jobId,
+                live: false,
+                simulate: true,
+              }),
+            }).catch(() => {
+              /* ignore */
+            });
           }
         } catch {
           /* keep polling */
@@ -197,8 +236,11 @@ export function NegotiatorDashboard() {
 
   /**
    * Auto-start golden replay.
-   * CRITICAL: do NOT list `state` in deps — setting phase to confirmed used to
-   * re-run cleanup and cancel startMock (stuck UI).
+   * CRITICAL:
+   * - Mark replayStarted only AFTER startMock (Strict Mode cleanup used to
+   *   cancel the first async load while leaving started=true → dead UI).
+   * - Do not setTimeout after phase transitions; startMock sets calling now.
+   * - Depend on phase/job_spec primitives, not full state object.
    */
   useEffect(() => {
     if (!vertical || !replay) return;
@@ -207,7 +249,6 @@ export function NegotiatorDashboard() {
     // Wait until initial draft state exists, then start once
     if (state.phase !== "draft" || state.job_spec) return;
 
-    replayStarted.current = true;
     let cancelled = false;
 
     (async () => {
@@ -216,24 +257,32 @@ export function NegotiatorDashboard() {
           vertical.id,
           replayLive ? "live" : "default",
         );
-        if (cancelled) return;
+        if (cancelled || replayStarted.current) return;
         const spec =
           (golden?.job_spec as JobSpec) || demoJobSpec(vertical);
         const events = resolveGoldenEvents(golden);
+        replayStarted.current = true;
         // startMock sets calling immediately — no fragile setTimeout
         startMock(vertical, spec, events);
       } catch {
-        if (!cancelled) {
-          startMock(vertical, demoJobSpec(vertical));
-        }
+        if (cancelled || replayStarted.current) return;
+        replayStarted.current = true;
+        startMock(vertical, demoJobSpec(vertical));
       }
     })();
 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only re-run on vertical/replay
-  }, [vertical, replay, replayLive, startMock]);
+  }, [
+    vertical,
+    replay,
+    replayLive,
+    startMock,
+    state?.phase,
+    // Only gate on "has any job_spec keys" so object identity churn doesn't re-fire
+    state?.job_spec ? 1 : 0,
+  ]);
 
   const onJobSpecChange = useCallback((spec: JobSpec) => {
     setState((prev) =>
@@ -392,7 +441,7 @@ export function NegotiatorDashboard() {
           <div className="ambient-orb ambient-orb-2" />
           <div className="ambient-orb ambient-orb-3" />
         </div>
-        <p className="ambient-content glass-panel px-6 py-4 text-sm text-[var(--color-smoke)]">
+        <p className="ambient-content glass-panel px-6 py-4 text-sm text-[var(--glass-text-secondary)]">
           Loading agents…
         </p>
       </div>
@@ -417,7 +466,7 @@ export function NegotiatorDashboard() {
 
   return (
     <div
-      className={`ambient-root flex min-h-screen flex-col text-[var(--color-ink)] ${
+      className={`ambient-root flex min-h-screen flex-col text-[var(--glass-text)] ${
         isWorking ? "is-working" : ""
       }`}
     >
@@ -487,11 +536,7 @@ export function NegotiatorDashboard() {
         </header>
 
         <main className="mx-auto grid w-full max-w-[1280px] flex-1 grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-3 lg:gap-4 lg:min-h-0 lg:overflow-hidden">
-          <div
-            className={`glass-panel flex min-h-0 flex-col overflow-hidden p-4 sm:p-5 lg:h-[calc(100vh-6.5rem)] ${
-              isWorking ? "" : ""
-            }`}
-          >
+          <div className="glass-panel flex min-h-0 flex-col overflow-hidden p-4 sm:p-5 lg:h-[calc(100vh-6.5rem)]">
             <div className="min-h-0 flex-1 space-y-4 overflow-auto">
               <JobColumn
                 vertical={vertical}

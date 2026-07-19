@@ -313,6 +313,11 @@ export function playMockStream(
 
   const timers: ReturnType<typeof setTimeout>[] = [];
   const sorted = [...events].sort((a, b) => a.t - b.t);
+  // Guarantee a terminal complete so UI never stays busy forever
+  if (!sorted.some((e) => e.type === "complete")) {
+    const lastT = sorted.length ? sorted[sorted.length - 1].t : 0;
+    sorted.push({ t: lastT + 800, type: "complete" });
+  }
 
   for (const ev of sorted) {
     const delay = Math.max(0, ev.t / speed);
@@ -879,7 +884,8 @@ export function normalizeApiState(
 
   // Attach review layer when complete
   let deal_review: JobState["deal_review"] = null;
-  if (phase === "complete" && ranked.length) {
+  // Always surface server review when job is complete (even if all declined / ranked empty)
+  if (phase === "complete") {
     const rawReview = (o as { deal_review?: JobState["deal_review"] })
       .deal_review;
     deal_review =

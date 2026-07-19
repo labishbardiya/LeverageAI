@@ -309,6 +309,8 @@ async function runStoneTrack(jobId: string, stone: Session): Promise<void> {
 
 /**
  * Run full multi-agent negotiation in parallel for a job.
+ * Idempotent / resumable: sessions that already have an outcome are skipped
+ * so a serverless timeout mid-run can be re-kicked to finish remaining tracks.
  */
 export async function simulateJobNegotiations(jobId: string): Promise<void> {
   const store = getStore();
@@ -327,8 +329,15 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     console.warn("[simulate] no sessions", jobId);
     return;
   }
-  if (sessions.some((s) => s.outcome_type != null)) {
-    console.log("[simulate] sessions already closed, skip", jobId);
+  // Only skip when every track is terminal (resume partial runs after timeout)
+  if (sessions.every((s) => s.outcome_type != null)) {
+    console.log("[simulate] all sessions already closed — marking complete", jobId);
+    await store.updateJob(jobId, { status: "complete" });
+    publish({
+      type: "job",
+      job_id: jobId,
+      payload: { status: "complete" },
+    });
     return;
   }
 
@@ -351,32 +360,65 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     vertical.benchmarks[Object.keys(vertical.benchmarks)[0]!]?.mid ??
     7500;
 
-  // All three dial at once
-  await markConnecting(jobId, sessions);
-  await sleep(400);
+  // Only re-dial tracks that still need work (don't reopen closed sessions)
+  const openSessions = sessions.filter((s) => s.outcome_type == null);
+  if (openSessions.length) {
+    await markConnecting(jobId, openSessions);
+    await sleep(400);
+  }
 
-  // Shared orchestration state: upseller publishes competing total for tough
-  let competingTotal: number | null = null;
+  // Shared orchestration state: upseller publishes competing total for tough.
+  // Seed from DB if upsell already finished (resume path).
+  let competingTotal: number | null =
+    upsell.outcome_type != null && upsell.current_total != null
+      ? upsell.current_total
+      : null;
+  if (competingTotal == null) {
+    const quotes = await store.listQuotesByJob(jobId);
+    const upsellQuotes = quotes
+      .filter((q) => q.session_id === upsell.id)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const last = upsellQuotes[upsellQuotes.length - 1];
+    if (last) competingTotal = last.total;
+  }
   const setCompetingTotal = (n: number) => {
     competingTotal = n;
   };
   const getCompetingTotal = () => competingTotal;
 
   console.log(
-    `[simulate] parallel multi-agent start job=${jobId} vendors=tough,stonewaller,upseller`
+    `[simulate] parallel multi-agent start job=${jobId} open=${openSessions
+      .map((s) => s.vendor_id)
+      .join(",")}`
   );
 
-  await Promise.all([
-    runToughTrack(jobId, tough, mid, getCompetingTotal),
-    runUpsellTrack(jobId, upsell, mid, setCompetingTotal),
-    runStoneTrack(jobId, stone),
-  ]);
+  const tasks: Promise<unknown>[] = [];
+  if (tough.outcome_type == null) {
+    tasks.push(runToughTrack(jobId, tough, mid, getCompetingTotal));
+  }
+  if (upsell.outcome_type == null) {
+    tasks.push(runUpsellTrack(jobId, upsell, mid, setCompetingTotal));
+  }
+  if (stone.outcome_type == null) {
+    tasks.push(runStoneTrack(jobId, stone));
+  }
+  await Promise.all(tasks);
 
-  await store.updateJob(jobId, { status: "complete" });
-  publish({
-    type: "job",
-    job_id: jobId,
-    payload: { status: "complete" },
-  });
-  console.log("[simulate] parallel complete", jobId);
+  // Re-read: only mark complete when every session has a terminal outcome
+  const finalSessions = await store.listSessionsByJob(jobId);
+  if (finalSessions.every((s) => s.outcome_type != null)) {
+    await store.updateJob(jobId, { status: "complete" });
+    publish({
+      type: "job",
+      job_id: jobId,
+      payload: { status: "complete" },
+    });
+    console.log("[simulate] parallel complete", jobId);
+  } else {
+    console.warn(
+      "[simulate] finished tracks but some sessions still open",
+      jobId,
+      finalSessions.map((s) => ({ v: s.vendor_id, o: s.outcome_type }))
+    );
+  }
 }

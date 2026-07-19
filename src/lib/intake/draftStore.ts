@@ -107,13 +107,39 @@ export async function fillIntakeDraft(
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
+/**
+ * Fill the most recent pending draft for this vertical (the one the UI is
+ * polling). Only creates a new draft if none are pending — otherwise voice
+ * intake that omits intake_id never updates the open form.
+ */
 export async function fillLatestByVertical(
   vertical: string,
   job_spec: JobSpec
 ): Promise<IntakeDraft> {
+  if (!hasDatabaseUrl()) {
+    const pending = [...mem().drafts.values()]
+      .filter((d) => d.vertical === vertical && d.status === "pending")
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    if (pending[0]) {
+      return (await fillIntakeDraft(pending[0].id, job_spec))!;
+    }
+    const d = await createIntakeDraft(vertical);
+    return (await fillIntakeDraft(d.id, job_spec))!;
+  }
+
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT id FROM intake_drafts
+     WHERE vertical = $1 AND status = 'pending'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [vertical]
+  );
+  if (rows[0]) {
+    return (await fillIntakeDraft(String(rows[0].id), job_spec))!;
+  }
   const d = await createIntakeDraft(vertical);
-  const filled = await fillIntakeDraft(d.id, job_spec);
-  return filled!;
+  return (await fillIntakeDraft(d.id, job_spec))!;
 }
 
 export async function getLatestFilled(

@@ -113,5 +113,38 @@ export async function closeSession(raw: unknown): Promise<CloseSessionResult> {
     };
   }
 
+  // Best-effort playbook learning (does not block close)
+  void (async () => {
+    try {
+      const job = await store.getJob(session.job_id);
+      if (!job) return;
+      const transcripts = await store.listTranscriptsBySession(session_id);
+      const quotes = await store.listQuotesByJob(session.job_id);
+      const sessionQuotes = quotes
+        .filter((q) => q.session_id === session_id)
+        .map((q) => q.total)
+        .filter((n): n is number => typeof n === "number");
+      const { extractLearningsFromSession } = await import(
+        "@/lib/learning/extract"
+      );
+      await extractLearningsFromSession({
+        vertical: job.vertical,
+        transcripts: transcripts.map((t) => ({
+          speaker: t.speaker,
+          text: t.text,
+          ts_ms: t.ts_ms,
+        })),
+        priceHistory:
+          sessionQuotes.length >= 2
+            ? sessionQuotes
+            : session.current_total != null
+              ? [session.current_total]
+              : [],
+      });
+    } catch {
+      /* learning is non-critical */
+    }
+  })();
+
   return { ok: true, session };
 }

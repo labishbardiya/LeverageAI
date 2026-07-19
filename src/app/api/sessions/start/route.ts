@@ -119,7 +119,6 @@ export async function POST(req: NextRequest) {
 
     const existing = await store.listSessionsByJob(job.id);
     if (existing.length > 0) {
-      const anyOutcome = existing.some((s) => s.outcome_type != null);
       const allDone =
         job.status === "complete" ||
         existing.every(
@@ -128,17 +127,30 @@ export async function POST(req: NextRequest) {
             s.status === "error" ||
             s.outcome_type != null
         );
-      // Re-kick only if nothing has landed AND no session is already mid-call
-      // (avoids parallel double-simulate races).
-      const inFlight = existing.some(
-        (s) => s.status === "live" || s.status === "connecting"
-      );
-      const neverStarted =
-        !anyOutcome && !inFlight && job.status === "running";
-      if (neverStarted && wantSimulate && !wantLive) {
+      // Re-kick stuck / never-started / partial (timeout) simulate runs.
+      // Skip only when a track looks freshly active (avoid double-parallel races).
+      const STALE_MS = 12_000;
+      const recentlyActive = existing.some((s) => {
+        if (s.outcome_type != null) return false;
+        if (s.status !== "live" && s.status !== "connecting") return false;
+        if (!s.last_event_at) return true; // just flipped to connecting
+        return Date.now() - new Date(s.last_event_at).getTime() < STALE_MS;
+      });
+      const needsSimulateResume =
+        wantSimulate &&
+        !wantLive &&
+        !allDone &&
+        !recentlyActive &&
+        (job.status === "running" ||
+          job.status === "confirmed" ||
+          job.confirmed);
+      if (needsSimulateResume) {
         const jobId = job.id;
+        if (job.status !== "running") {
+          await store.updateJob(jobId, { status: "running" });
+        }
         scheduleBackground(async () => {
-          console.log(`[sessions/start] re-kick simulate job=${jobId}`);
+          console.log(`[sessions/start] re-kick/resume simulate job=${jobId}`);
           await simulateJobNegotiations(jobId);
         });
       }
@@ -152,13 +164,11 @@ export async function POST(req: NextRequest) {
           ? "complete"
           : existing.some(
                 (s) => s.status === "live" || s.status === "connecting"
-              )
+              ) || needsSimulateResume
             ? wantLive
               ? "bridging"
               : "simulating"
-            : neverStarted
-              ? "simulating"
-              : "ready",
+            : "ready",
         live_mode_available: liveAvailable,
         note:
           liveRequested && !liveAvailable
@@ -180,13 +190,15 @@ export async function POST(req: NextRequest) {
     const frozen = job.frozen_job_spec ?? job.job_spec;
     const jobSpecJson = JSON.stringify(frozen);
 
+    // Create as connecting immediately so concurrent POSTs see in-flight
+    // sessions and do not spawn a second full vendor set / double-simulate.
     const sessions = [];
     for (const vendor of vertical.vendors) {
       const session = await store.createSession({
         job_id: job.id,
         vendor_id: vendor.id,
         vendor_name: vendor.name ?? vendor.displayName,
-        status: "pending",
+        status: "connecting",
       });
       sessions.push(session);
       publish({
@@ -200,16 +212,6 @@ export async function POST(req: NextRequest) {
     await store.updateJob(job.id, { status: "running" });
 
     if (wantLive) {
-      for (const s of sessions) {
-        await store.updateSession(s.id, { status: "connecting" });
-        publish({
-          type: "session",
-          job_id: job.id,
-          session_id: s.id,
-          payload: { ...s, status: "connecting" },
-        });
-      }
-
       const intents: BridgePairIntent[] = sessions.map((s) => {
         const slot = s.vendor_id as "tough" | "stonewaller" | "upseller";
         return {
@@ -319,16 +321,6 @@ export async function POST(req: NextRequest) {
         }
       });
     } else if (wantSimulate) {
-      for (const s of sessions) {
-        await store.updateSession(s.id, { status: "connecting" });
-        publish({
-          type: "session",
-          job_id: job.id,
-          session_id: s.id,
-          payload: { ...s, status: "connecting" },
-        });
-      }
-
       const jobId = job.id;
       scheduleBackground(async () => {
         console.log(`[sessions/start] background simulate job=${jobId}`);

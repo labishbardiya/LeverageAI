@@ -134,15 +134,6 @@ function extractAgentText(msg: JsonMsg): string | null {
   return null;
 }
 
-function extractUserTranscript(msg: JsonMsg): string | null {
-  const userEvt = msg.user_transcription_event as JsonMsg | undefined;
-  if (userEvt?.user_transcript) return String(userEvt.user_transcript);
-  if (msg.type === "user_transcript" && typeof msg.user_transcript === "string") {
-    return msg.user_transcript;
-  }
-  return null;
-}
-
 function extractConversationId(msg: JsonMsg): string | null {
   if (typeof msg.conversation_id === "string") return msg.conversation_id;
   if (typeof msg.conversationId === "string") return msg.conversationId;
@@ -282,14 +273,9 @@ export async function runAgentBridge(
           return;
         }
 
-        const userT = extractUserTranscript(msg);
-        if (userT) {
-          // Synthetic user_message echoes — label from peer perspective
-          void append(
-            fromRole === "negotiator" ? "negotiator" : "vendor",
-            `(heard) ${userT}`
-          );
-        }
+        // Skip user_transcription_event entirely: kickoff is a synthetic
+        // user_message, and cross-wired peer text also arrives as user_message.
+        // Logging those would leak the kickoff brief and double every turn.
 
         const agentText = extractAgentText(msg);
         if (!agentText) return;
