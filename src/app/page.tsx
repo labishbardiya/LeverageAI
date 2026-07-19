@@ -1,16 +1,20 @@
 import { Suspense } from "react";
-import { NegotiatorDashboard } from "@/components/NegotiatorDashboard";
+import { AppHome } from "@/components/AppHome";
 
 export default function Home() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-slate-50">
-          <p className="text-sm text-slate-500">Loading The Negotiator…</p>
+        <div className="ambient-root flex min-h-screen items-center justify-center">
+          <div className="ambient-bg" aria-hidden>
+            <div className="ambient-orb ambient-orb-1" />
+            <div className="ambient-orb ambient-orb-2" />
+            <div className="ambient-orb ambient-orb-3" />
+          </div>
         </div>
       }
     >
-      <NegotiatorDashboard />
+      <AppHome />
     </Suspense>
   );
 }
