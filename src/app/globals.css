@@ -732,6 +732,64 @@ textarea {
   cursor: not-allowed;
 }
 
+.btn-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 9px 18px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: #0c0b0a;
+  border: 1px solid #0c0b0a;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.btn-send:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.type-caret {
+  display: inline-block;
+  margin-left: 1px;
+  animation: caretBlink 0.9s step-end infinite;
+  color: var(--ink-muted);
+}
+
+@keyframes caretBlink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Responsive portal frame */
+@media (max-width: 640px) {
+  .portal-outer,
+  .landing-outer {
+    padding: 6px;
+  }
+  .portal-frame,
+  .landing-frame {
+    border-radius: 16px;
+    min-height: calc(100dvh - 12px);
+  }
+  .wa-thread {
+    min-height: 36vh;
+    max-height: 48vh;
+  }
+  .landing-headline {
+    font-size: clamp(1.85rem, 9vw, 2.6rem);
+  }
+}
+
 .portal-header-merge {
   background: transparent !important;
   border-bottom: none !important;

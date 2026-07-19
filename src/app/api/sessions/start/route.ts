@@ -195,7 +195,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const frozen = job.frozen_job_spec ?? job.job_spec;
+    const frozen = {
+      ...(job.frozen_job_spec ?? job.job_spec),
+      vertical: job.vertical,
+    };
     const jobSpecJson = JSON.stringify(frozen);
 
     // Create as connecting immediately so concurrent POSTs see in-flight
@@ -244,6 +247,7 @@ export async function POST(req: NextRequest) {
           sessionId: s.id,
           jobSpecJson,
           playbookHint,
+          vertical: job.vertical,
         };
       });
 

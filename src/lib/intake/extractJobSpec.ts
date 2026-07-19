@@ -40,7 +40,11 @@ export type ExtractedJobSpec = z.infer<typeof JobSpecZod>;
 
 function heuristicFromText(text: string, verticalId: string): ExtractedJobSpec {
   const v = loadVertical(verticalId);
-  const base = { ...v.demo_defaults } as ExtractedJobSpec;
+  // Start empty — do NOT seed demo ZIP/city so live runs stay location-true
+  const base = {
+    job_type: v.default_job_type,
+    job_kind: v.default_job_type,
+  } as ExtractedJobSpec;
   const t = text.toLowerCase();
   const raw = text || "";
 
@@ -144,15 +148,19 @@ export async function extractJobSpecFromUpload(input: {
     }
   }
   if (!text) {
-    text =
-      input.filename ||
-      (vertical === "movers"
-        ? "2 bedroom local move from Rock Hill to Charlotte zip 29730 packing partial"
-        : vertical === "medical-imaging"
-          ? "MRI knee without contrast cash price zip 28202 this week"
-          : vertical === "auto-repair"
-            ? "2018 Honda Civic check engine light zip 28202"
-            : "3-ton central AC not cooling zip 28202 this week");
+    // Filename-only upload — still parse what we can; do NOT invent a city/ZIP
+    text = input.filename ? `document: ${input.filename}` : "";
+  }
+  if (!text.trim()) {
+    const v = loadVertical(vertical);
+    return {
+      job_spec: JobSpecZod.parse({
+        job_type: v.default_job_type,
+        job_kind: v.default_job_type,
+        notes: "",
+      }),
+      path: "heuristic",
+    };
   }
   return {
     job_spec: heuristicFromText(text, vertical),

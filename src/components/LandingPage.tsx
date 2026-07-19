@@ -3,8 +3,8 @@
 import Link from "next/link";
 
 /**
- * Landing — Instrument Serif headline, plain LEVERAGE wordmark,
- * cloud video sky, minimal CTA (no button chrome).
+ * Landing — Instrument Serif headline, plain LEVERAGE + micro mark,
+ * cloud video sky, Close Smart Deals → portal.
  */
 export function LandingPage() {
   return (
@@ -28,9 +28,17 @@ export function LandingPage() {
         </div>
 
         <header className="landing-header landing-header-merge">
-          <span className="logo-leverage logo-plain" aria-label="LEVERAGE">
-            LEVERAGE
-          </span>
+          <div className="flex items-center gap-2.5" aria-label="LEVERAGE">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-mark.svg"
+              alt=""
+              width={28}
+              height={28}
+              className="opacity-90"
+            />
+            <span className="logo-leverage logo-plain">LEVERAGE</span>
+          </div>
           <Link href="/livee" className="link-cta">
             Close Smart Deals →
           </Link>
@@ -42,9 +50,6 @@ export function LandingPage() {
               <span className="landing-line">You name the job.</span>
               <span className="landing-line">We lock the price.</span>
             </h1>
-            <p className="landing-sub landing-sub-plain">
-              One job. Three shops. One clear pick.
-            </p>
             <Link href="/livee" className="link-cta link-cta-lg">
               Close Smart Deals →
             </Link>

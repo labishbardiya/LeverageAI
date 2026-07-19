@@ -10,23 +10,27 @@ type Place = {
   rating?: number;
   provider_score?: number;
   googleMapsUri?: string;
-  lat?: number;
-  lng?: number;
-  location?: { latitude?: number; longitude?: number };
+  location?: { lat?: number; lng?: number };
 };
 
 type Props = {
   vertical: string;
-  zip: string;
+  zip?: string;
+  location?: string;
+  geo?: { lat: number; lng: number } | null;
 };
 
 /**
- * Top-3 shops map strip under chats.
- * Free OSM embed — no Google Maps key required (Places key still optional for live list).
+ * Top-3 shops map — live discovery by user location text.
+ * OSM embed centered on geocoded job location when available.
  */
-export function Top3Map({ vertical, zip }: Props) {
+export function Top3Map({ vertical, zip, location, geo }: Props) {
   const [places, setPlaces] = useState<Place[]>([]);
   const [query, setQuery] = useState("");
+  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(
+    geo || null,
+  );
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,36 +39,69 @@ export function Top3Map({ vertical, zip }: Props) {
         const res = await fetch("/api/discovery", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vertical, zip }),
+          body: JSON.stringify({
+            vertical,
+            zip: zip || undefined,
+            location: location || zip || undefined,
+            query_text: location || zip || undefined,
+          }),
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          if (!cancelled) {
+            setErr(
+              (e as { error?: string }).error ||
+                "Could not load local shops for this location.",
+            );
+          }
+          return;
+        }
         const data = (await res.json()) as {
           top3?: Place[];
           places?: Place[];
           query?: string;
+          geo?: { lat: number; lng: number } | null;
+          location?: string;
         };
         if (cancelled) return;
         setPlaces((data.top3 || data.places || []).slice(0, 3));
-        setQuery(data.query || `${vertical} near ${zip}`);
+        setQuery(data.query || data.location || location || zip || "");
+        if (data.geo?.lat != null) {
+          setCenter({ lat: data.geo.lat, lng: data.geo.lng });
+        } else {
+          const withLoc = (data.top3 || data.places || []).find(
+            (p) => p.location?.lat != null,
+          );
+          if (withLoc?.location?.lat != null && withLoc.location.lng != null) {
+            setCenter({
+              lat: withLoc.location.lat,
+              lng: withLoc.location.lng,
+            });
+          }
+        }
+        setErr(null);
       } catch {
-        /* ignore */
+        if (!cancelled) setErr("Discovery network error");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [vertical, zip]);
+  }, [vertical, zip, location]);
 
+  if (err && !places.length) {
+    return (
+      <p className="mt-4 text-center text-[12px] text-[var(--ink-muted)]">
+        {err}
+      </p>
+    );
+  }
   if (!places.length) return null;
 
-  // Charlotte / Rock Hill defaults when snapshots lack lat/lng
-  const center =
-    zip.startsWith("297")
-      ? { lat: 34.9249, lng: -81.0251 }
-      : { lat: 35.2271, lng: -80.8431 };
-  const d = 0.06;
-  const bbox = `${center.lng - d}%2C${center.lat - d}%2C${center.lng + d}%2C${center.lat + d}`;
-  const osmSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${center.lat}%2C${center.lng}`;
+  const c = center || { lat: 39.5, lng: -98.35 };
+  const d = 0.08;
+  const bbox = `${c.lng - d}%2C${c.lat - d}%2C${c.lng + d}%2C${c.lat + d}`;
+  const osmSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${c.lat}%2C${c.lng}`;
 
   return (
     <section className="stage-enter mt-5">
@@ -75,37 +112,38 @@ export function Top3Map({ vertical, zip }: Props) {
             <iframe
               title="Area map"
               src={osmSrc}
-              className="h-[220px] w-full border-0 sm:h-[260px]"
+              className="h-[200px] w-full border-0 sm:h-[260px]"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
             />
             <p className="px-2 py-1.5 text-center text-[10px] text-[var(--ink-muted)]">
-              Map · {query || zip} · OpenStreetMap
+              Map · {query || "your location"} · live
             </p>
           </div>
           <ol className="flex flex-col gap-2">
             {places.map((p, i) => {
               const name = p.displayName || p.name || `Shop ${i + 1}`;
-              const addr =
-                p.formattedAddress || p.address || `Near ZIP ${zip}`;
+              const addr = p.formattedAddress || p.address || "";
               const maps =
                 p.googleMapsUri ||
-                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  `${name} ${addr}`
+                `https://www.openstreetmap.org/search?query=${encodeURIComponent(
+                  `${name} ${addr}`,
                 )}`;
               return (
                 <li
                   key={`${name}-${i}`}
                   className="glass-inner flex items-start gap-3 p-3 text-left"
                 >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/80 text-[12px] font-semibold text-[var(--ink)]">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/80 text-[12px] font-semibold">
                     {i + 1}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-semibold">{name}</p>
-                    <p className="mt-0.5 text-[11px] leading-snug text-[var(--ink-muted)]">
-                      {addr}
-                    </p>
+                    {addr && (
+                      <p className="mt-0.5 text-[11px] leading-snug text-[var(--ink-muted)]">
+                        {addr}
+                      </p>
+                    )}
                     <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-[var(--ink-secondary)]">
                       {typeof p.rating === "number" && (
                         <span>★ {p.rating.toFixed(1)}</span>

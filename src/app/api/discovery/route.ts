@@ -11,14 +11,33 @@ import {
   computeProviderScore,
   type PlaceLike,
 } from "@/lib/ranking/providerScore";
+import {
+  extractLocationHints,
+  geocodeLocation,
+  resolveGeoFromJobText,
+} from "@/lib/places/geocode";
+import { searchOverpassNear } from "@/lib/places/overpass";
 
 const schema = z.object({
   vertical: z.string().default("hvac"),
-  zip: z.string().min(3).max(12),
+  /** Preferred: free-text job or location string from the user */
+  location: z.string().optional(),
+  query_text: z.string().optional(),
+  /** Optional ZIP if already extracted */
+  zip: z.string().min(3).max(12).optional(),
 });
 
-function loadSnapshot(vertical: string, zip: string): PlaceDetails[] {
-  const fallbackName =
+function queryFor(vertical: string, where: string): string {
+  if (vertical === "movers") return `moving company near ${where}`;
+  if (vertical === "medical-imaging")
+    return `MRI imaging center near ${where}`;
+  if (vertical === "auto-repair") return `auto repair shop near ${where}`;
+  return `HVAC contractor near ${where}`;
+}
+
+/** Last-resort offline file — only if live network paths all fail */
+function loadSnapshotFallback(vertical: string): PlaceDetails[] {
+  const name =
     vertical === "movers"
       ? "movers-29730.json"
       : vertical === "medical-imaging"
@@ -26,36 +45,85 @@ function loadSnapshot(vertical: string, zip: string): PlaceDetails[] {
         : vertical === "auto-repair"
           ? "auto-repair-28202.json"
           : "hvac-28202.json";
-  const candidates = [
-    join(process.cwd(), "data", "discovery", `${vertical}-${zip}.json`),
-    join(process.cwd(), "data", "discovery", fallbackName),
-  ];
-  for (const p of candidates) {
-    if (!existsSync(p)) continue;
-    try {
-      const data = JSON.parse(readFileSync(p, "utf8")) as {
-        places?: Record<string, unknown>[];
-      };
-      return (data.places || []).map((pl, i) => enrichFromSnapshotPlace(pl, i));
-    } catch {
-      /* next */
-    }
+  const p = join(process.cwd(), "data", "discovery", name);
+  if (!existsSync(p)) return [];
+  try {
+    const data = JSON.parse(readFileSync(p, "utf8")) as {
+      places?: Record<string, unknown>[];
+    };
+    return (data.places || []).map((pl, i) => enrichFromSnapshotPlace(pl, i));
+  } catch {
+    return [];
   }
-  return [];
 }
 
-function queryFor(vertical: string, zip: string): string {
-  if (vertical === "movers") return `moving company near ${zip}`;
-  if (vertical === "medical-imaging")
-    return `MRI imaging center cash price near ${zip}`;
-  if (vertical === "auto-repair") return `auto repair shop near ${zip}`;
-  return `HVAC contractor near ${zip}`;
+async function searchGooglePlaces(
+  textQuery: string
+): Promise<PlaceDetails[]> {
+  const key = process.env.GOOGLE_PLACES_API_KEY?.trim();
+  if (!key) return [];
+  const res = await fetch(
+    "https://places.googleapis.com/v1/places:searchText",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask":
+          "places.id,places.displayName,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.formattedAddress,places.location,places.googleMapsUri",
+      },
+      body: JSON.stringify({ textQuery }),
+    }
+  );
+  if (!res.ok) {
+    console.warn("[discovery] Places searchText", res.status);
+    return [];
+  }
+  const data = (await res.json()) as {
+    places?: Array<Record<string, unknown>>;
+  };
+  const list: PlaceDetails[] = [];
+  for (const p of data.places || []) {
+    const id = typeof p.id === "string" ? p.id : null;
+    if (!id) continue;
+    const detailed = await fetchPlaceDetails(id);
+    if (detailed) {
+      list.push(detailed);
+      continue;
+    }
+    const loc = p.location as
+      | { latitude?: number; longitude?: number }
+      | undefined;
+    list.push(
+      enrichFromSnapshotPlace(
+        {
+          displayName:
+            typeof p.displayName === "object" && p.displayName
+              ? (p.displayName as { text?: string }).text
+              : p.displayName,
+          rating: p.rating,
+          userRatingCount: p.userRatingCount,
+          nationalPhoneNumber: p.nationalPhoneNumber,
+          formattedAddress: p.formattedAddress,
+          place_id: id,
+          googleMapsUri: p.googleMapsUri,
+          location: loc
+            ? { lat: loc.latitude, lng: loc.longitude }
+            : undefined,
+        },
+        list.length
+      )
+    );
+  }
+  return list;
 }
 
 /**
  * POST /api/discovery
- * Text Search + Place Details + ProviderScore ranking.
- * Attribution: Google Places data — link to googleMapsUri; review authors shown.
+ * Live discovery from user location text / ZIP.
+ * 1) Google Places (New) when GOOGLE_PLACES_API_KEY set
+ * 2) else OpenStreetMap Overpass near geocoded lat/lng (real-time, free)
+ * 3) offline snapshot only if network fails
  */
 export async function POST(req: NextRequest) {
   try {
@@ -67,63 +135,65 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { vertical, zip } = parsed.data;
-    const textQuery = queryFor(vertical, zip);
-    const key = process.env.GOOGLE_PLACES_API_KEY?.trim();
+    const { vertical } = parsed.data;
+    const freeText = [
+      parsed.data.query_text,
+      parsed.data.location,
+      parsed.data.zip,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    if (!freeText) {
+      return NextResponse.json(
+        {
+          error:
+            "Tell us where the job is (city or ZIP) so we can find real local shops.",
+          code: "LOCATION_REQUIRED",
+        },
+        { status: 400 }
+      );
+    }
+
+    const hints = extractLocationHints(freeText);
+    const geo =
+      (await resolveGeoFromJobText(freeText, parsed.data.zip || hints.zip)) ||
+      (hints.cityQuery ? await geocodeLocation(hints.cityQuery) : null) ||
+      (parsed.data.zip
+        ? await geocodeLocation(`${parsed.data.zip}, USA`)
+        : null);
+
+    const whereLabel =
+      geo?.display_name ||
+      parsed.data.zip ||
+      hints.zip ||
+      hints.cityQuery ||
+      freeText.slice(0, 80);
+    const textQuery = queryFor(vertical, whereLabel);
 
     let detailsList: PlaceDetails[] = [];
-    let source = "offline snapshot (data/discovery)";
+    let source = "";
 
-    if (key) {
-      const res = await fetch(
-        "https://places.googleapis.com/v1/places:searchText",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": key,
-            "X-Goog-FieldMask":
-              "places.id,places.displayName,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.formattedAddress",
-          },
-          body: JSON.stringify({ textQuery }),
-        }
-      );
-      if (res.ok) {
-        source = "Google Places API v1 (searchText + Place Details)";
-        const data = (await res.json()) as {
-          places?: Array<Record<string, unknown>>;
-        };
-        for (const p of data.places || []) {
-          const id = typeof p.id === "string" ? p.id : null;
-          if (!id) continue;
-          const detailed = await fetchPlaceDetails(id);
-          if (detailed) detailsList.push(detailed);
-          else {
-            detailsList.push(
-              enrichFromSnapshotPlace(
-                {
-                  displayName:
-                    typeof p.displayName === "object" && p.displayName
-                      ? (p.displayName as { text?: string }).text
-                      : p.displayName,
-                  rating: p.rating,
-                  userRatingCount: p.userRatingCount,
-                  nationalPhoneNumber: p.nationalPhoneNumber,
-                  formattedAddress: p.formattedAddress,
-                  place_id: id,
-                },
-                detailsList.length
-              )
-            );
-          }
-        }
+    // 1) Google Places when configured
+    detailsList = await searchGooglePlaces(textQuery);
+    if (detailsList.length > 0) {
+      source = "Google Places API (New) — live searchText + Place Details";
+    }
+
+    // 2) Live OSM Overpass near geocoded point
+    if (detailsList.length === 0 && geo) {
+      detailsList = await searchOverpassNear(vertical, geo.lat, geo.lng);
+      if (detailsList.length > 0) {
+        source = "OpenStreetMap Overpass — live near your location";
       }
     }
 
-    // Always-available offline path (judges / no Places key / API failure)
+    // 3) Soft fallback only if live paths failed
     if (detailsList.length === 0) {
-      detailsList = loadSnapshot(vertical, zip);
-      source = "offline snapshot (data/discovery)";
+      detailsList = loadSnapshotFallback(vertical);
+      source =
+        "Offline snapshot (live search unavailable — set GOOGLE_PLACES_API_KEY or check network)";
     }
 
     const ranked = detailsList
@@ -143,14 +213,22 @@ export async function POST(req: NextRequest) {
       .sort((a, b) => b.score.total - a.score.total);
 
     const top3 = ranked.slice(0, 3);
+    const resolvedZip =
+      geo?.zip || hints.zip || parsed.data.zip || undefined;
 
     return NextResponse.json({
       vertical,
-      zip,
+      zip: resolvedZip,
+      location: whereLabel,
+      geo: geo
+        ? { lat: geo.lat, lng: geo.lng, display_name: geo.display_name }
+        : null,
       query: textQuery,
       source,
       attribution:
-        "Place data © Google. Ratings and reviews from Google. Use View on Google Maps for full listing.",
+        source.includes("Google")
+          ? "Place data © Google. Ratings and reviews from Google."
+          : "Map data © OpenStreetMap contributors.",
       places: ranked.map((r) => ({
         ...r.provider,
         provider_score: r.score.total,
@@ -162,7 +240,8 @@ export async function POST(req: NextRequest) {
         score_breakdown: r.score.components,
       })),
       caption:
-        "Top local providers by rating and reviews. Your negotiator works these in parallel for you.",
+        "Top local providers ranked for this job location — fetched live from your query.",
+      live: !source.includes("Offline"),
     });
   } catch (e) {
     console.error("[POST /api/discovery]", e);

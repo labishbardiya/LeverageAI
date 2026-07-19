@@ -20,7 +20,7 @@ import type {
   TranscriptLine,
   VerticalConfig,
 } from "@/lib/ui/types";
-import { demoJobSpec } from "@/lib/ui/types";
+
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { LearningPanel } from "./LearningPanel";
 import { Top3Map } from "./Top3Map";
@@ -31,35 +31,45 @@ const MODES = [
     id: "hvac",
     label: "HVAC",
     hint: "Cooling & heating quotes",
-    placeholder:
-      "Describe the job — e.g. 3-ton AC not cooling in 28202, need replacement this week",
-    sample:
-      "3-ton central AC not cooling in ZIP 28202. System is about 12 years old. Need replacement quotes this week.",
+    typewriters: [
+      "My AC stopped cooling in Chicago, ZIP 60614…",
+      "Need a 3-ton central AC replacement in Austin TX…",
+      "Furnace not heating, Brooklyn 11201, this week…",
+      "Heat pump quote near Seattle, WA 98101…",
+    ],
   },
   {
     id: "movers",
     label: "Local move",
     hint: "Moving company quotes",
-    placeholder:
-      "e.g. 2-bed apartment from Rock Hill to Charlotte, packing help, this weekend",
-    sample:
-      "2-bed apartment move from Rock Hill SC to Charlotte NC this weekend. Need packing help and three quotes.",
+    typewriters: [
+      "2-bed move from Denver to Boulder this weekend…",
+      "Local apartment move in Atlanta, packing help…",
+      "House move Dallas to Fort Worth, next Friday…",
+      "Studio move in Portland OR with stairs…",
+    ],
   },
   {
     id: "medical-imaging",
     label: "Cash MRI",
     hint: "Imaging cash prices",
-    placeholder: "e.g. MRI knee without contrast, cash price, ZIP 28202",
-    sample:
-      "MRI of the knee without contrast, cash-pay price, ZIP 28202. Flexible on appointment timing.",
+    typewriters: [
+      "Cash MRI knee without contrast, Phoenix AZ…",
+      "MRI brain cash price near Miami 33101…",
+      "Need cash-pay lumbar MRI in Boston…",
+      "Shoulder MRI quote, San Diego area…",
+    ],
   },
   {
     id: "auto-repair",
     label: "Auto repair",
     hint: "Shop repair quotes",
-    placeholder: "e.g. 2018 Honda Civic check-engine light, ZIP 28202",
-    sample:
-      "2018 Honda Civic check-engine light on, ZIP 28202. Need diagnostic and repair quotes this week.",
+    typewriters: [
+      "2019 Toyota Camry brakes, Houston 77002…",
+      "Check-engine light on my Honda, Minneapolis…",
+      "2018 Civic AC not cold, ZIP 85001…",
+      "Oil leak repair quote near Detroit…",
+    ],
   },
 ] as const;
 
@@ -393,7 +403,14 @@ export function ProductWorkspace() {
   const [talkUrl, setTalkUrl] = useState<string | null>(null);
   const [liveAvailable, setLiveAvailable] = useState(false);
   const [showDiscovery, setShowDiscovery] = useState(false);
-  const [discoveryZip, setDiscoveryZip] = useState("28202");
+  const [discoveryZip, setDiscoveryZip] = useState("");
+  const [discoveryLocation, setDiscoveryLocation] = useState("");
+  const [discoveryGeo, setDiscoveryGeo] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [twDisplay, setTwDisplay] = useState("");
+  const [focused, setFocused] = useState(false);
 
   const chatsRef = useRef<HTMLDivElement>(null);
   const dealRef = useRef<HTMLDivElement>(null);
@@ -404,6 +421,47 @@ export function ProductWorkspace() {
 
   const modeMeta = MODES.find((m) => m.id === mode) || MODES[0];
   const natures = useMemo(() => naturesFromVertical(vertical), [vertical]);
+
+  // Typewriter placeholders (3–4 lines, hold ~2.5s)
+  useEffect(() => {
+    if (focused || prompt.trim()) {
+      setTwDisplay("");
+      return;
+    }
+    const lines = modeMeta.typewriters;
+    let lineIdx = 0;
+    let charIdx = 0;
+    let phase: "type" | "hold" | "erase" = "type";
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const line = lines[lineIdx] || "";
+      if (phase === "type") {
+        charIdx += 1;
+        setTwDisplay(line.slice(0, charIdx));
+        if (charIdx >= line.length) {
+          phase = "hold";
+          timer = setTimeout(tick, 2500);
+          return;
+        }
+        timer = setTimeout(tick, 28 + Math.random() * 24);
+      } else if (phase === "hold") {
+        phase = "erase";
+        timer = setTimeout(tick, 40);
+      } else {
+        charIdx -= 1;
+        setTwDisplay(line.slice(0, Math.max(0, charIdx)));
+        if (charIdx <= 0) {
+          lineIdx = (lineIdx + 1) % lines.length;
+          phase = "type";
+          timer = setTimeout(tick, 320);
+          return;
+        }
+        timer = setTimeout(tick, 16);
+      }
+    };
+    timer = setTimeout(tick, 400);
+    return () => clearTimeout(timer);
+  }, [modeMeta.typewriters, focused, prompt, mode]);
 
   const stopPoll = useCallback(() => {
     if (pollRef.current) {
@@ -540,21 +598,70 @@ export function ProductWorkspace() {
 
   const beginNegotiations = useCallback(
     async (jobId: string, jobSpec: JobSpec, cfg: VerticalConfig) => {
-      const zip = String(jobSpec.zip || cfg.demo_defaults?.zip || "28202");
-      setDiscoveryZip(zip);
+      const locText = [
+        jobSpec.zip,
+        jobSpec.from_city,
+        jobSpec.to_city,
+        jobSpec.notes,
+        prompt,
+      ]
+        .filter(Boolean)
+        .map(String)
+        .join(" ");
+
       setShowDiscovery(true);
       setStatusStep("match");
-      setStatus("Matching local shops…");
+      setStatus("Finding real shops near your job…");
       setStage("working");
 
-      await fetch("/api/discovery", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vertical: cfg.id, zip }),
-      }).catch(() => null);
+      let zip = jobSpec.zip ? String(jobSpec.zip) : "";
+      let locationLabel = locText;
+      try {
+        const discRes = await fetch("/api/discovery", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            vertical: cfg.id,
+            query_text: locText,
+            location: locText,
+            zip: zip || undefined,
+          }),
+        });
+        if (discRes.ok) {
+          const disc = (await discRes.json()) as {
+            zip?: string;
+            location?: string;
+            geo?: { lat: number; lng: number } | null;
+            error?: string;
+          };
+          if (disc.zip) zip = disc.zip;
+          if (disc.location) locationLabel = disc.location;
+          if (disc.geo?.lat != null && disc.geo?.lng != null) {
+            setDiscoveryGeo({ lat: disc.geo.lat, lng: disc.geo.lng });
+          }
+        } else {
+          const err = await discRes.json().catch(() => ({}));
+          if ((err as { code?: string }).code === "LOCATION_REQUIRED") {
+            throw new Error(
+              "Add a city or ZIP so we can find real shops near you.",
+            );
+          }
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.includes("city or ZIP")) throw e;
+        /* discovery soft-fail — still negotiate */
+      }
+
+      setDiscoveryZip(zip);
+      setDiscoveryLocation(locationLabel);
+
+      // Persist resolved location onto job_spec for agents
+      if (zip && !jobSpec.zip) {
+        jobSpec = { ...jobSpec, zip };
+      }
 
       setStatusStep("connect");
-      setStatus("Connecting to three providers…");
+      setStatus("Multi-agent mode · connecting…");
       setState({
         job_id: jobId,
         phase: "calling",
@@ -570,7 +677,7 @@ export function ProductWorkspace() {
         });
       });
 
-      setStatus("Negotiating in parallel…");
+      setStatus("Multi-agent mode · negotiating…");
       setStatusStep("negotiate");
       const startRes = await fetch("/api/sessions/start", {
         method: "POST",
@@ -589,12 +696,12 @@ export function ProductWorkspace() {
       };
       setStatus(
         body.live
-          ? "Live agents negotiating in parallel…"
-          : "Negotiating in parallel…",
+          ? "Multi-agent mode · live"
+          : "Multi-agent mode · running",
       );
       startPolling(jobId, cfg);
     },
-    [startPolling],
+    [startPolling, prompt],
   );
 
   const runPipeline = useCallback(
@@ -646,7 +753,10 @@ export function ProductWorkspace() {
     stopPoll();
     setError(null);
 
-    let jobSpec: JobSpec = { ...demoJobSpec(vertical) };
+    let jobSpec: JobSpec = {
+      job_type: vertical.default_job_type || "job",
+      job_kind: vertical.default_job_type || "job",
+    };
 
     try {
       setBusy(true);
@@ -734,9 +844,13 @@ export function ProductWorkspace() {
         return;
       }
 
-      // Empty send → demo defaults for this mode
+      // Empty send — require real job text with location
       setBusy(false);
-      await runPipeline(demoJobSpec(vertical));
+      setError(
+        "Describe the job and where it is (city or ZIP), then press Send.",
+      );
+      setStatus(null);
+      setStatusStep(null);
     } catch (err) {
       setBusy(false);
       setStage("compose");
@@ -747,11 +861,20 @@ export function ProductWorkspace() {
     }
   };
 
+  const jobSpecToPrompt = (spec: JobSpec): string => {
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(spec)) {
+      if (v == null || v === "" || k === "job_type" || k === "job_kind") continue;
+      parts.push(`${k.replace(/_/g, " ")}: ${String(v)}`);
+    }
+    return parts.join(". ") + (parts.length ? "." : "");
+  };
+
   const onTalk = async () => {
     if (!vertical) return;
     setError(null);
     setTalkOpen(true);
-    setStatus("Starting voice…");
+    setStatus("Speak with Leverage · we close the deal for you");
     try {
       const res = await fetch("/api/intake/start", {
         method: "POST",
@@ -766,9 +889,13 @@ export function ProductWorkspace() {
       };
       setIntakeId(data.intake_id);
       setTalkUrl(data.talk_url);
-      setStatus("Speak with Leverage — we fill the job for you");
+      setStatus("Multi-agent mode · voice");
       if (data.talk_url) {
         window.open(data.talk_url, "_blank", "noopener,noreferrer");
+      } else {
+        setError(
+          "Voice agent not linked. Set ELEVENLABS_INTAKE_AGENT_ID and ensure submit_spec webhook hits this app.",
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Voice failed");
@@ -776,6 +903,7 @@ export function ProductWorkspace() {
     }
   };
 
+  // Voice → fill the input box (do not auto-start; user reviews then Send)
   useEffect(() => {
     if (!intakeId || !vertical || stage === "working") return;
     let cancelled = false;
@@ -794,11 +922,16 @@ export function ProductWorkspace() {
         if (data.status === "filled" && data.job_spec) {
           clearInterval(id);
           setTalkOpen(false);
-          setStatus("Got it — starting negotiations…");
-          await runPipeline({
-            ...demoJobSpec(vertical),
-            ...data.job_spec,
-          });
+          const filled = { ...data.job_spec };
+          const text = jobSpecToPrompt(filled);
+          setPrompt(
+            text ||
+              Object.values(filled)
+                .filter(Boolean)
+                .join(" · "),
+          );
+          setStatus("Multi-agent mode · ready to send");
+          setError(null);
         }
       } catch {
         /* ignore */
@@ -808,18 +941,11 @@ export function ProductWorkspace() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [intakeId, vertical, stage, runPipeline]);
+  }, [intakeId, vertical, stage]);
 
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
     setFile(f);
-  };
-
-  const fillSampleJob = () => {
-    // ONLY fills the text box — does not start negotiations
-    setPrompt(modeMeta.sample);
-    setError(null);
-    setStatus("Sample job loaded — press Send when ready");
   };
 
   const sessions = state?.sessions || [];
@@ -928,7 +1054,13 @@ export function ProductWorkspace() {
         <div className="portal-content">
         <header className="portal-header-merge sticky top-0 z-30">
           <div className="mx-auto flex max-w-[var(--max)] items-center justify-between px-4 py-4 sm:px-6">
-            <a href="/" className="no-underline" aria-label="LEVERAGE home">
+            <a
+              href="/"
+              className="flex items-center gap-2 no-underline"
+              aria-label="LEVERAGE home"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-mark.svg" alt="" width={26} height={26} />
               <span className="logo-leverage logo-plain">LEVERAGE</span>
             </a>
           </div>
@@ -942,78 +1074,37 @@ export function ProductWorkspace() {
             }`}
           >
             {!showResults && (
-              <>
-                <h1 className="font-instrument text-[30px] tracking-tight sm:text-[36px]">
-                  <span className="block">You name the job.</span>
-                  <span className="block">We lock the price.</span>
-                </h1>
-                <p className="mt-3 max-w-md text-[15px] leading-relaxed text-[var(--ink-secondary)]">
-                  One job. Three shops. One clear pick.
-                </p>
-              </>
+              <h1 className="font-instrument text-[clamp(1.75rem,5vw,2.25rem)] tracking-tight leading-tight">
+                <span className="block">You name the job.</span>
+                <span className="block">We lock the price.</span>
+              </h1>
             )}
 
             <form
               onSubmit={(e) => void onSend(e)}
-              className="composer-shell glass-liquid-strong mt-6 w-full p-3 text-left"
+              className="composer-shell glass-liquid-strong mt-6 w-full max-w-full p-3 text-left sm:p-4"
             >
-              <div className="relative mb-2" ref={modeRef}>
-                <button
-                  type="button"
-                  onClick={() => setModeOpen((o) => !o)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-dark)] bg-white/50 px-3 py-1 text-[13px] font-medium text-[var(--ink)]"
-                  disabled={busy}
-                >
-                  {modeMeta.label}
-                  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
-                    <path
-                      d="M3 4.5 L6 7.5 L9 4.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    />
-                  </svg>
-                </button>
-                {modeOpen && (
-                  <div className="mode-menu absolute left-0 top-full z-20 mt-1 w-64 overflow-hidden rounded-xl border border-[var(--border)] bg-white/90 py-1 shadow-[var(--shadow-md)] backdrop-blur-xl">
-                    {MODES.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        className={`flex w-full flex-col items-start px-3 py-2 text-left hover:bg-black/5 ${
-                          m.id === mode ? "bg-black/[0.04]" : ""
-                        }`}
-                        onClick={() => {
-                          stopPoll();
-                          setMode(m.id);
-                          setModeOpen(false);
-                          setState(null);
-                          setStage("compose");
-                          setStatus(null);
-                          setStatusStep(null);
-                          setError(null);
-                          setShowDiscovery(false);
-                          setBusy(false);
-                        }}
-                      >
-                        <span className="text-[13px] font-medium">{m.label}</span>
-                        <span className="text-[11px] text-[var(--ink-muted)]">
-                          {m.hint}
-                        </span>
-                      </button>
-                    ))}
+              <div className="relative min-h-[4.5rem]">
+                {!prompt && !focused && twDisplay && (
+                  <div
+                    className="pointer-events-none absolute inset-0 px-1 py-1 text-[15px] leading-relaxed text-[var(--ink-muted)]"
+                    aria-hidden
+                  >
+                    {twDisplay}
+                    <span className="type-caret">|</span>
                   </div>
                 )}
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  placeholder={focused || prompt ? "" : " "}
+                  rows={showResults ? 2 : 3}
+                  disabled={busy}
+                  className="relative z-[1] w-full resize-none border-0 bg-transparent px-1 py-1 text-[15px] leading-relaxed text-[var(--ink)] outline-none"
+                />
               </div>
-
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder={modeMeta.placeholder}
-                rows={showResults ? 2 : 3}
-                disabled={busy}
-                className="w-full resize-none border-0 bg-transparent px-1 py-1 text-[15px] leading-relaxed text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)]"
-              />
 
               {file && (
                 <div className="mb-2 flex items-center gap-2 rounded-lg bg-white/40 px-2 py-1.5 text-[12px]">
@@ -1031,7 +1122,7 @@ export function ProductWorkspace() {
                 </div>
               )}
 
-              <div className="mt-1 flex flex-wrap items-center gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <input
                   ref={fileRef}
                   type="file"
@@ -1044,7 +1135,7 @@ export function ProductWorkspace() {
                   onClick={() => fileRef.current?.click()}
                   disabled={busy}
                   className="icon-plus"
-                  aria-label="Upload document or image"
+                  aria-label="Upload"
                   title="Upload"
                 >
                   +
@@ -1053,46 +1144,89 @@ export function ProductWorkspace() {
                   type="button"
                   onClick={() => void onTalk()}
                   disabled={busy}
-                  className="link-cta text-[13px]"
+                  className="icon-plus"
+                  aria-label="Voice mode"
+                  title="Voice"
                 >
-                  Talk
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Z"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    />
+                    <path
+                      d="M5 11a7 7 0 0 0 14 0M12 18v3"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </button>
-                <button
-                  type="button"
-                  disabled={busy || !vertical}
-                  onClick={fillSampleJob}
-                  className="link-cta text-[13px]"
-                >
-                  Sample
-                </button>
-                <button
-                  type="submit"
-                  disabled={busy || !vertical}
-                  className="link-cta ml-auto text-[14px] font-semibold"
-                >
-                  {busy ? "Working…" : "Send →"}
-                </button>
+
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <div className="relative" ref={modeRef}>
+                    <button
+                      type="button"
+                      onClick={() => setModeOpen((o) => !o)}
+                      className="inline-flex items-center gap-1 rounded-full border border-white/50 bg-white/35 px-3 py-1.5 text-[12px] font-medium"
+                      disabled={busy}
+                    >
+                      {modeMeta.label}
+                      <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
+                        <path
+                          d="M3 4.5 L6 7.5 L9 4.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
+                      </svg>
+                    </button>
+                    {modeOpen && (
+                      <div className="mode-menu absolute bottom-full right-0 z-20 mb-1 w-56 overflow-hidden rounded-xl border border-white/50 bg-white/95 py-1 shadow-lg">
+                        {MODES.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            className={`flex w-full flex-col items-start px-3 py-2 text-left hover:bg-black/5 ${
+                              m.id === mode ? "bg-black/[0.04]" : ""
+                            }`}
+                            onClick={() => {
+                              stopPoll();
+                              setMode(m.id);
+                              setModeOpen(false);
+                              setState(null);
+                              setStage("compose");
+                              setStatus(null);
+                              setStatusStep(null);
+                              setError(null);
+                              setShowDiscovery(false);
+                              setBusy(false);
+                              setDiscoveryGeo(null);
+                            }}
+                          >
+                            <span className="text-[13px] font-medium">{m.label}</span>
+                            <span className="text-[11px] text-[var(--ink-muted)]">
+                              {m.hint}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button type="submit" disabled={busy || !vertical} className="btn-send">
+                    {busy ? "…" : "Send"}
+                  </button>
+                </div>
               </div>
             </form>
 
-            {(status || error || talkOpen) && !showResults && (
+            {(status || error) && !showResults && (
               <div className="mt-4 w-full text-center text-[13px]">
                 {error && <p className="text-[var(--danger)]">{error}</p>}
                 {!error && status && (
                   <p className="flex items-center justify-center gap-2 text-[var(--ink-secondary)]">
-                    {busy && <span className="pulse-dot" />}
+                    {(busy || talkOpen) && <span className="pulse-dot" />}
                     {status}
-                  </p>
-                )}
-                {talkOpen && talkUrl && (
-                  <p className="mt-1 text-[12px] text-[var(--ink-muted)]">
-                    Voice window opened. When you finish, we pick up the job
-                    automatically.
-                  </p>
-                )}
-                {liveAvailable && stage === "compose" && (
-                  <p className="mt-2 text-[11px] text-[var(--ink-muted)]">
-                    Live multi-agent mode available
                   </p>
                 )}
               </div>
@@ -1116,7 +1250,8 @@ export function ProductWorkspace() {
             <section className="stage-enter mb-5">
               <DiscoveryPanel
                 vertical={vertical}
-                zip={discoveryZip}
+                zip={discoveryZip || " "}
+                location={discoveryLocation || prompt}
                 compact
                 busy={busy && !state}
               />
@@ -1161,7 +1296,12 @@ export function ProductWorkspace() {
                   );
                 })}
               </div>
-              <Top3Map vertical={vertical.id} zip={discoveryZip} />
+              <Top3Map
+                vertical={vertical.id}
+                zip={discoveryZip || undefined}
+                location={discoveryLocation || prompt}
+                geo={discoveryGeo}
+              />
             </section>
           )}
 

@@ -29,6 +29,7 @@ type Provider = {
 type Props = {
   vertical: VerticalConfig;
   zip: string;
+  location?: string;
   onContinue?: () => void;
   busy?: boolean;
   /** Product flow: compact ProviderScore ranking, no start button */
@@ -59,7 +60,12 @@ export function DiscoveryPanel({
         const res = await fetch("/api/discovery", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vertical: vertical.id, zip }),
+          body: JSON.stringify({
+            vertical: vertical.id,
+            zip: zip || undefined,
+            location: location || zip || undefined,
+            query_text: location || zip || undefined,
+          }),
         });
         const data = (await res.json()) as {
           places?: Provider[];
@@ -67,13 +73,23 @@ export function DiscoveryPanel({
           caption?: string;
           source?: string;
           attribution?: string;
+          location?: string;
         };
         if (cancelled) return;
+        if (!res.ok) {
+          setPlaces([]);
+          setTop3([]);
+          setCaption(
+            (data as { error?: string }).error ||
+              "Add a city or ZIP to find local shops.",
+          );
+          return;
+        }
         const list = data.places || [];
         const top = data.top3 || list.slice(0, 3);
         setPlaces(list);
         setTop3(top);
-        setCaption(data.caption || "");
+        setCaption(data.caption || data.location || "");
         setSource(data.source || "");
         setAttribution(data.attribution || "");
         onRanked?.(top);
@@ -87,7 +103,7 @@ export function DiscoveryPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onRanked optional callback
-  }, [vertical.id, zip]);
+  }, [vertical.id, zip, location]);
 
   const personas = vertical.vendors.slice(0, 3);
 

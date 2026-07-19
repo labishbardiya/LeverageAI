@@ -93,4 +93,6 @@ export interface BridgePairIntent {
   jobSpecJson: string;
   /** UCB1 playbook sentences for the negotiator (optional). */
   playbookHint?: string;
+  /** Active vertical id so agents adapt (hvac | movers | …). */
+  vertical?: string;
 }

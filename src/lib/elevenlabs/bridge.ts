@@ -108,6 +108,7 @@ function sendInit(
       job_spec_json: intent.jobSpecJson,
       bridge_role: role,
       playbook: intent.playbookHint || "",
+      vertical: intent.vertical || "",
     },
   });
 }
@@ -189,11 +190,25 @@ function buildKickoff(intent: BridgePairIntent): string {
   } catch {
     /* ignore */
   }
+  const vertical =
+    typeof job.vertical === "string"
+      ? job.vertical
+      : intent.vertical || "hvac";
+  const verticalHint =
+    vertical === "movers"
+      ? "This is a local moving quote. Ask for labor+truck total and access fees."
+      : vertical === "medical-imaging"
+        ? "This is a cash-pay MRI/imaging price. Ask for cash total with/without contrast."
+        : vertical === "auto-repair"
+          ? "This is an auto repair quote. Ask for diagnosis + parts/labor total."
+          : "This is an HVAC install/repair quote. Ask for itemized installed total.";
+
   const parts = [
     "You are on a live call with a vendor dispatcher. Sound like a calm buying consultant.",
+    `Vertical: ${vertical}. ${verticalHint}`,
     `Company key: ${intent.companyKey}.`,
     "RULES: One idea per turn (1–3 short sentences). Always answer them. Never send only '…' or partial words. Never re-greet after the call has started. Never speak tool names.",
-    "Open once: AI disclosure + job from JSON + ask for itemized installed total. Then listen.",
+    "Open once: AI disclosure + job from JSON (use their real city/ZIP) + ask for itemized total. Then listen.",
     "When you have a firm total: log_quote then close_session. Callback-only: close_session as callback_commitment. Hard refuse: documented_decline.",
     `Job JSON: ${JSON.stringify(job)}`,
   ];
