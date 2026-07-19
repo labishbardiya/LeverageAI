@@ -38,5 +38,8 @@ export function enforceNoBookingCommitment(text: string): string {
   ) {
     return "I cannot book, purchase, authorize work, or confirm an appointment. Please provide the written itemized quote and available callback window for the customer to review.";
   }
+  if (/\b(callback|call back).{0,80}\b(works|confirm|scheduled|then)\b/i.test(text)) {
+    return "Please share the available callback window for the customer to review. I cannot confirm a visit or appointment.";
+  }
   return text;
 }

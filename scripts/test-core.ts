@@ -172,6 +172,18 @@ async function main() {
     }]).length,
     1,
   );
+  assert.equal(
+    evidencedQuotes([evidenceQuote], [{
+      id: 2,
+      session_id: "s-evidence",
+      ts_ms: 2,
+      speaker: "vendor",
+      text: "The total is five hundred ninety dollars.",
+      created_at: createdAt,
+    }]).length,
+    1,
+    "spoken number words must qualify as quote evidence",
+  );
 
   const bundle = await buildEvidenceBundle({
     generated_at: createdAt,

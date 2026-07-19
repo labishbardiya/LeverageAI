@@ -242,7 +242,7 @@ function buildKickoff(intent: BridgePairIntent): string {
     `Company key: ${intent.companyKey}.`,
     "RULES: One idea per turn (1–3 short sentences). Always answer them. Never send only '…' or partial words. Never re-greet after the call has started. Never speak tool names.",
     "Open once: AI disclosure + job from JSON (use their real city/ZIP) + ask for itemized total. Then listen.",
-    "When you have a firm total: log_quote then close_session. Callback-only: close_session as callback_commitment. Hard refuse: documented_decline. Never accept, book, schedule, purchase, authorize work, or say go ahead; only ask for a written quote or callback window for human review.",
+    "When you have a firm total: say the exact numeric total and line-item amounts naturally, then log_quote and close_session. Callback-only: close_session as callback_commitment. Hard refuse: documented_decline. Never accept, book, schedule, purchase, authorize work, or say go ahead. For a callback, only request available times and state that no visit or appointment is authorized.",
     `Job JSON: ${JSON.stringify(job)}`,
   ];
   if (intent.playbookHint) {
