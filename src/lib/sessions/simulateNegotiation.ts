@@ -67,10 +67,19 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     console.warn("[simulate] job not found", jobId);
     return;
   }
+  if (job.status === "complete") {
+    console.log("[simulate] job already complete, skip", jobId);
+    return;
+  }
   const vertical = loadVertical(job.vertical);
   const sessions = await store.listSessionsByJob(jobId);
   if (!sessions.length) {
     console.warn("[simulate] no sessions", jobId);
+    return;
+  }
+  // Don't re-run if any session already has a structured outcome
+  if (sessions.some((s) => s.outcome_type != null)) {
+    console.log("[simulate] sessions already closed, skip", jobId);
     return;
   }
 

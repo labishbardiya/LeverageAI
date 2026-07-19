@@ -119,15 +119,18 @@ export async function POST(req: NextRequest) {
 
     const existing = await store.listSessionsByJob(job.id);
     if (existing.length > 0) {
-      const allDone = existing.every(
-        (s) =>
-          s.status === "closed" ||
-          s.status === "error" ||
-          s.outcome_type != null
-      );
-      // Re-kick simulate if sessions exist but negotiation never finished
-      // (e.g. previous deploy crashed mid-run).
-      if (!allDone && wantSimulate && !wantLive) {
+      const anyOutcome = existing.some((s) => s.outcome_type != null);
+      const allDone =
+        job.status === "complete" ||
+        existing.every(
+          (s) =>
+            s.status === "closed" ||
+            s.status === "error" ||
+            s.outcome_type != null
+        );
+      // Re-kick simulate only if nothing has landed yet (crash before first outcome).
+      const neverStarted = !anyOutcome && job.status === "running";
+      if (neverStarted && wantSimulate && !wantLive) {
         const jobId = job.id;
         scheduleBackground(async () => {
           console.log(`[sessions/start] re-kick simulate job=${jobId}`);
@@ -140,15 +143,17 @@ export async function POST(req: NextRequest) {
         job_id: job.id,
         live: wantLive,
         simulate: wantSimulate && !wantLive,
-        status: existing.some(
-          (s) => s.status === "live" || s.status === "connecting"
-        )
-          ? wantLive
-            ? "bridging"
-            : "simulating"
-          : allDone
-            ? "complete"
-            : "ready",
+        status: allDone
+          ? "complete"
+          : existing.some(
+                (s) => s.status === "live" || s.status === "connecting"
+              )
+            ? wantLive
+              ? "bridging"
+              : "simulating"
+            : neverStarted
+              ? "simulating"
+              : "ready",
         live_mode_available: liveAvailable,
         note:
           liveRequested && !liveAvailable
