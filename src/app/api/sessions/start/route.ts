@@ -13,17 +13,24 @@ import { getAgentId } from "@/lib/elevenlabs/env";
 import { runBridgesSequential } from "@/lib/elevenlabs/bridge";
 import type { BridgePairIntent } from "@/lib/elevenlabs/types";
 import { fetchAndStoreRecording } from "@/lib/elevenlabs/recordings";
+import { simulateJobNegotiations } from "@/lib/sessions/simulateNegotiation";
 
 export const runtime = "nodejs";
 /**
  * Vercel Hobby max is 300s; Pro/Fluid can raise further.
- * Background bridges use waitUntil — return is still instant.
+ * Background bridges / simulate use waitUntil — return is still instant.
  */
 export const maxDuration = 300;
 
 const schema = z.object({
   job_id: z.string().uuid(),
+  /** True = ElevenLabs agent bridges (requires keys + DATABASE_URL). */
   live: z.boolean().optional(),
+  /**
+   * True = server-side scripted negotiation writing real DB rows (default when
+   * live is not requested). Always works with Neon; best for live demos.
+   */
+  simulate: z.boolean().optional(),
 });
 
 function scheduleBackground(work: () => Promise<void>): void {
@@ -53,8 +60,10 @@ function scheduleBackground(work: () => Promise<void>): void {
 
 /**
  * POST /api/sessions/start
- * Live: fire-and-forget bridges, return immediately with status "bridging".
- * Replay/scaffold: create sessions only.
+ *
+ * Modes:
+ * - simulate (default): background script writes transcripts/quotes; UI polls.
+ * - live=true: ElevenLabs text bridges (only if all agent env vars present).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -79,30 +88,72 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const wantLive = isLiveModeEnabled() && parsed.data.live !== false;
-    if (wantLive && !hasDatabaseUrl()) {
+    // Explicit live bridges only when live===true AND agents configured.
+    // Otherwise default to server simulate (reliable for live pitch demos).
+    const liveRequested = parsed.data.live === true;
+    const liveAvailable = isLiveModeEnabled();
+    let wantLive = liveRequested && liveAvailable;
+    let wantSimulate =
+      !wantLive &&
+      (parsed.data.simulate === true ||
+        parsed.data.live !== true ||
+        !liveAvailable);
+
+    // Serverless: both modes need shared Postgres so polling sees writes.
+    if ((wantLive || wantSimulate) && !hasDatabaseUrl()) {
       return NextResponse.json(
         {
           error:
-            "live mode requires Postgres — in-memory store breaks across serverless instances. Set DATABASE_URL (Neon).",
+            "Live/simulate mode requires Postgres — in-memory store breaks across serverless instances. Set DATABASE_URL (Neon).",
           code: "DATABASE_REQUIRED_FOR_LIVE",
         },
         { status: 400 }
       );
     }
 
+    if (liveRequested && !liveAvailable) {
+      // Fall through to simulate with a clear flag
+      wantLive = false;
+      wantSimulate = true;
+    }
+
     const existing = await store.listSessionsByJob(job.id);
     if (existing.length > 0) {
+      const allDone = existing.every(
+        (s) =>
+          s.status === "closed" ||
+          s.status === "error" ||
+          s.outcome_type != null
+      );
+      // Re-kick simulate if sessions exist but negotiation never finished
+      // (e.g. previous deploy crashed mid-run).
+      if (!allDone && wantSimulate && !wantLive) {
+        const jobId = job.id;
+        scheduleBackground(async () => {
+          console.log(`[sessions/start] re-kick simulate job=${jobId}`);
+          await simulateJobNegotiations(jobId);
+        });
+      }
       return NextResponse.json({
         sessions: existing,
         already_started: true,
         job_id: job.id,
         live: wantLive,
+        simulate: wantSimulate && !wantLive,
         status: existing.some(
           (s) => s.status === "live" || s.status === "connecting"
         )
-          ? "bridging"
-          : "ready",
+          ? wantLive
+            ? "bridging"
+            : "simulating"
+          : allDone
+            ? "complete"
+            : "ready",
+        live_mode_available: liveAvailable,
+        note:
+          liveRequested && !liveAvailable
+            ? "ElevenLabs agents not fully configured — using server simulate"
+            : undefined,
       });
     }
 
@@ -250,6 +301,38 @@ export async function POST(req: NextRequest) {
           }
         }
       });
+    } else if (wantSimulate) {
+      for (const s of sessions) {
+        await store.updateSession(s.id, { status: "connecting" });
+        publish({
+          type: "session",
+          job_id: job.id,
+          session_id: s.id,
+          payload: { ...s, status: "connecting" },
+        });
+      }
+
+      const jobId = job.id;
+      scheduleBackground(async () => {
+        console.log(`[sessions/start] background simulate job=${jobId}`);
+        try {
+          await simulateJobNegotiations(jobId);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("[sessions/start] simulate fatal", msg);
+          const storeE = getStore();
+          for (const s of await storeE.listSessionsByJob(jobId)) {
+            if (!s.outcome_type) {
+              await storeE.closeSession(
+                s.id,
+                "documented_decline",
+                `simulate_error: ${msg}`
+              );
+            }
+          }
+          await storeE.updateJob(jobId, { status: "complete" });
+        }
+      });
     }
 
     const pub = toPublicVertical(vertical);
@@ -260,8 +343,19 @@ export async function POST(req: NextRequest) {
         job_id: job.id,
         sessions: latest,
         live: wantLive,
-        status: wantLive ? "bridging" : "ready",
+        simulate: wantSimulate && !wantLive,
+        status: wantLive
+          ? "bridging"
+          : wantSimulate
+            ? "simulating"
+            : "ready",
         bridge_async: wantLive,
+        simulate_async: wantSimulate && !wantLive,
+        live_mode_available: liveAvailable,
+        note:
+          liveRequested && !liveAvailable
+            ? "ElevenLabs agents not fully configured — using server simulate"
+            : undefined,
         vendors: pub.vendors.map((v) => ({
           id: v.id,
           name: v.name ?? v.displayName,

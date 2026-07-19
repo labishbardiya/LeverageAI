@@ -25,7 +25,14 @@ import type {
 } from "@/lib/ui/types";
 import { demoJobSpec, verticalTitle } from "@/lib/ui/types";
 
-const POLL_MS = 1000;
+const POLL_MS = 800;
+
+const VERTICALS = [
+  { id: "hvac", label: "HVAC" },
+  { id: "movers", label: "Movers" },
+  { id: "medical-imaging", label: "MRI Imaging" },
+  { id: "auto-repair", label: "Auto Repair" },
+] as const;
 
 export function NegotiatorDashboard() {
   const searchParams = useSearchParams();
@@ -37,17 +44,9 @@ export function NegotiatorDashboard() {
     replayParam === "1";
   const replayLive = replayParam === "live";
 
-  const VERTICALS = [
-    { id: "hvac", label: "HVAC" },
-    { id: "movers", label: "Movers" },
-    { id: "medical-imaging", label: "MRI Imaging" },
-    { id: "auto-repair", label: "Auto Repair" },
-  ] as const;
-
   const switchVertical = (id: string) => {
     const url = new URL(window.location.href);
     url.searchParams.set("vertical", id);
-    // keep replay if present
     window.location.href = url.toString();
   };
 
@@ -60,10 +59,12 @@ export function NegotiatorDashboard() {
     ts: number;
   } | null>(null);
   const [showDiscovery, setShowDiscovery] = useState(false);
+  const [banner, setBanner] = useState<string | null>(null);
 
   const streamRef = useRef<StreamHandle | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const replayStarted = useRef(false);
+  const verticalRef = useRef<VerticalConfig | null>(null);
 
   const voiceAgentId =
     typeof process !== "undefined"
@@ -82,6 +83,17 @@ export function NegotiatorDashboard() {
       streamRef.current?.stop();
       stopPolling();
       setBusy(true);
+      setShowDiscovery(false);
+      setBanner(replay ? "Golden replay running…" : "Live simulation running…");
+
+      // Immediate UI feedback — never leave buttons stuck on "Confirmed"
+      setState({
+        job_id: `mock-${Date.now()}`,
+        phase: "calling",
+        job_spec,
+        sessions: emptySessions(cfg),
+        ranked: [],
+      });
 
       void (async () => {
         let evs = events;
@@ -102,19 +114,22 @@ export function NegotiatorDashboard() {
           cfg,
           (next) => {
             setState(next);
-            if (next.phase === "complete") setBusy(false);
+            if (next.phase === "complete") {
+              setBusy(false);
+              setBanner(null);
+            }
           },
-          { speed: 1.8, job_spec: spec },
+          { speed: 1.6, job_spec: spec },
         );
       })();
     },
-    [stopPolling, replayLive],
+    [stopPolling, replayLive, replay],
   );
 
   const startPolling = useCallback(
     (jobId: string, cfg: VerticalConfig) => {
       stopPolling();
-      pollRef.current = setInterval(async () => {
+      const tick = async () => {
         try {
           const res = await fetch(`/api/jobs/${jobId}/state`, {
             cache: "no-store",
@@ -127,11 +142,15 @@ export function NegotiatorDashboard() {
           if (normalized.phase === "complete") {
             stopPolling();
             setBusy(false);
+            setBanner("Negotiations complete — ranked deals ready");
+            setTimeout(() => setBanner(null), 4000);
           }
         } catch {
           /* keep polling */
         }
-      }, POLL_MS);
+      };
+      void tick(); // immediate first paint
+      pollRef.current = setInterval(() => void tick(), POLL_MS);
     },
     [stopPolling],
   );
@@ -141,6 +160,9 @@ export function NegotiatorDashboard() {
     let cancelled = false;
     setLoadError(null);
     setVertical(null);
+    setState(null);
+    setShowDiscovery(false);
+    setBanner(null);
     replayStarted.current = false;
     streamRef.current?.stop();
     stopPolling();
@@ -153,6 +175,7 @@ export function NegotiatorDashboard() {
         if (!res.ok) throw new Error(`Vertical ${verticalId} not found`);
         const cfg = (await res.json()) as VerticalConfig;
         if (cancelled) return;
+        verticalRef.current = cfg;
         setVertical(cfg);
         setState(initialJobState(cfg));
       } catch (e) {
@@ -171,33 +194,45 @@ export function NegotiatorDashboard() {
     };
   }, [verticalId, stopPolling]);
 
-  // Auto-start golden replay
+  /**
+   * Auto-start golden replay.
+   * CRITICAL: do NOT list `state` in deps — setting phase to confirmed used to
+   * re-run cleanup and cancel startMock (stuck UI).
+   */
   useEffect(() => {
-    if (!vertical || !state || !replay) return;
+    if (!vertical || !replay) return;
     if (replayStarted.current) return;
-    if (state.phase !== "draft") return;
-    replayStarted.current = true;
+    if (!state) return;
+    // Wait until initial draft state exists, then start once
+    if (state.phase !== "draft" || state.job_spec) return;
 
+    replayStarted.current = true;
     let cancelled = false;
+
     (async () => {
-      const golden = await loadGoldenRun(vertical.id);
-      if (cancelled) return;
-      const spec =
-        (golden?.job_spec as JobSpec) || demoJobSpec(vertical);
-      setState((prev) =>
-        prev ? { ...prev, job_spec: spec, phase: "confirmed" } : prev,
-      );
-      setTimeout(() => {
+      try {
+        const golden = await loadGoldenRun(
+          vertical.id,
+          replayLive ? "live" : "default",
+        );
+        if (cancelled) return;
+        const spec =
+          (golden?.job_spec as JobSpec) || demoJobSpec(vertical);
+        const events = resolveGoldenEvents(golden);
+        // startMock sets calling immediately — no fragile setTimeout
+        startMock(vertical, spec, events);
+      } catch {
         if (!cancelled) {
-          startMock(vertical, spec, resolveGoldenEvents(golden));
+          startMock(vertical, demoJobSpec(vertical));
         }
-      }, 250);
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [vertical, state, replay, startMock]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only re-run on vertical/replay
+  }, [vertical, replay, replayLive, startMock]);
 
   const onJobSpecChange = useCallback((spec: JobSpec) => {
     setState((prev) =>
@@ -209,13 +244,31 @@ export function NegotiatorDashboard() {
     async (jobId: string, spec: JobSpec) => {
       if (!vertical) return;
       setBusy(true);
+      setBanner("Starting negotiations…");
       try {
+        // Prefer server simulate (always works with Neon) + optional live bridges
         const startRes = await fetch("/api/sessions/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ job_id: jobId }),
+          body: JSON.stringify({
+            job_id: jobId,
+            // Use live bridges only if explicitly ?live=1; default simulate for reliability
+            live: searchParams.get("live") === "1",
+            simulate: searchParams.get("live") !== "1",
+          }),
         });
-        if (!startRes.ok) throw new Error("start failed");
+        if (!startRes.ok) {
+          const err = await startRes.json().catch(() => ({}));
+          throw new Error(
+            (err as { error?: string }).error || "start failed",
+          );
+        }
+        const body = (await startRes.json()) as {
+          sessions?: unknown[];
+          live?: boolean;
+          status?: string;
+          simulate?: boolean;
+        };
 
         setShowDiscovery(false);
         setState({
@@ -225,13 +278,25 @@ export function NegotiatorDashboard() {
           sessions: emptySessions(vertical),
           ranked: [],
         });
+        setBanner(
+          body.live
+            ? "Live ElevenLabs agent bridges running — transcripts stream into Neon…"
+            : body.simulate
+              ? "Live negotiations running (server) — quotes & transcripts writing to Neon…"
+              : "Sessions started — polling for updates…",
+        );
         startPolling(jobId, vertical);
-      } catch {
+      } catch (e) {
         setShowDiscovery(false);
+        setBanner(
+          e instanceof Error
+            ? `${e.message} — falling back to client stream`
+            : "Falling back to client stream",
+        );
         startMock(vertical, spec);
       }
     },
-    [vertical, startPolling, startMock],
+    [vertical, startPolling, startMock, searchParams],
   );
 
   const onConfirm = useCallback(async () => {
@@ -240,6 +305,7 @@ export function NegotiatorDashboard() {
     streamRef.current?.stop();
     stopPolling();
 
+    // Replay mode: pure client golden stream
     if (replay) {
       startMock(vertical, state.job_spec);
       return;
@@ -254,7 +320,7 @@ export function NegotiatorDashboard() {
           job_spec: state.job_spec,
         }),
       });
-      if (!createRes.ok) throw new Error("jobs create failed");
+      if (!createRes.ok) throw new Error("Could not create job");
 
       const created = (await createRes.json()) as {
         job?: { id: string };
@@ -262,12 +328,12 @@ export function NegotiatorDashboard() {
         job_id?: string;
       };
       const jobId = created.job?.id || created.job_id || created.id;
-      if (!jobId) throw new Error("no job id");
+      if (!jobId) throw new Error("No job id returned");
 
       const confirmRes = await fetch(`/api/jobs/${jobId}/confirm`, {
         method: "PATCH",
       });
-      if (!confirmRes.ok) throw new Error("confirm failed");
+      if (!confirmRes.ok) throw new Error("Could not confirm job");
 
       setState((prev) =>
         prev
@@ -281,16 +347,16 @@ export function NegotiatorDashboard() {
       );
       setShowDiscovery(true);
       setBusy(false);
-    } catch {
+      setBanner("Pick providers, then start negotiations");
+    } catch (e) {
+      setBanner(
+        e instanceof Error
+          ? `${e.message} — using offline simulation`
+          : "Using offline simulation",
+      );
       startMock(vertical, state.job_spec);
     }
-  }, [
-    vertical,
-    state?.job_spec,
-    replay,
-    startMock,
-    stopPolling,
-  ]);
+  }, [vertical, state?.job_spec, replay, startMock, stopPolling]);
 
   const onListen = useCallback((vendor_id: string, ts: number) => {
     setHighlight({ vendor_id, ts });
@@ -348,7 +414,7 @@ export function NegotiatorDashboard() {
                   ? " · live-run replay"
                   : replay
                     ? " · golden replay"
-                    : ""}
+                    : " · live"}
               </p>
             </div>
             <div className="ml-4 flex flex-wrap gap-1">
@@ -378,6 +444,11 @@ export function NegotiatorDashboard() {
             <PhasePill phase={state.phase} />
           </div>
         </div>
+        {banner && (
+          <div className="border-t border-emerald-100 bg-emerald-50 px-6 py-1.5 text-center text-xs text-emerald-900">
+            {banner}
+          </div>
+        )}
       </header>
 
       <main className="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 gap-6 p-6 lg:grid-cols-3 lg:gap-5 lg:min-h-0 lg:overflow-hidden">

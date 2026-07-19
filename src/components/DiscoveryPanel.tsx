@@ -239,12 +239,15 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
 
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || loading}
         onClick={onContinue}
         className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
       >
-        Start negotiations
+        {busy ? "Starting live negotiations…" : "Start negotiations"}
       </button>
+      <p className="text-center text-[10px] text-slate-400">
+        Runs for real against Neon — transcripts and quotes stream as they land.
+      </p>
     </div>
   );
 }
