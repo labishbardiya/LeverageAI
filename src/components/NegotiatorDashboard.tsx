@@ -434,10 +434,10 @@ export function NegotiatorDashboard() {
             <div className="flex min-w-0 items-center gap-3">
               <div className="audio-sphere shrink-0" aria-hidden />
               <div className="min-w-0">
-                <h1 className="font-display text-[20px] leading-none tracking-[-0.02em] text-[var(--color-ink)]">
+                <h1 className="font-display text-[20px] leading-none tracking-[-0.02em] text-white">
                   LeverageAI
                 </h1>
-                <p className="mt-0.5 truncate text-[12px] text-[var(--color-smoke)]">
+                <p className="mt-0.5 truncate text-[12px] text-white/60">
                   {verticalTitle(vertical)}
                   {replayLive
                     ? " · live-run replay"
@@ -454,8 +454,8 @@ export function NegotiatorDashboard() {
                     onClick={() => switchVertical(v.id)}
                     className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
                       verticalId === v.id
-                        ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-white"
-                        : "border-white/50 bg-white/40 text-[var(--color-graphite)] hover:bg-white/65"
+                        ? "border-white/50 bg-white/90 text-[#0c0b0a]"
+                        : "border-white/20 bg-white/10 text-white/80 hover:bg-white/18"
                     }`}
                   >
                     {v.label}
@@ -480,7 +480,7 @@ export function NegotiatorDashboard() {
           )}
 
           {banner && !isWorking && (
-            <div className="border-t border-white/30 bg-white/25 px-6 py-2 text-center text-[12px] text-[var(--color-graphite)]">
+            <div className="border-t border-white/10 bg-white/[0.06] px-6 py-2 text-center text-[12px] text-white/75">
               {banner}
             </div>
           )}
@@ -561,8 +561,8 @@ function PhasePill({ phase }: { phase: string }) {
     <span
       className={`shrink-0 rounded-full border px-3 py-1 text-[12px] font-medium ${
         active
-          ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-white"
-          : "border-white/50 bg-white/45 text-[var(--color-smoke)]"
+          ? "border-white/40 bg-white/90 text-[#0c0b0a]"
+          : "border-white/20 bg-white/10 text-white/70"
       }`}
     >
       {label}

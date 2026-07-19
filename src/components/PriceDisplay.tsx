@@ -40,7 +40,7 @@ export function PriceDisplay({ price, className = "" }: Props) {
   if (price == null) {
     return (
       <div
-        className={`font-semibold tabular-nums text-slate-300 text-5xl leading-none ${className}`}
+        className={`font-semibold tabular-nums text-5xl leading-none text-white/35 ${className}`}
       >
         —
       </div>
@@ -49,10 +49,10 @@ export function PriceDisplay({ price, className = "" }: Props) {
 
   const color =
     flash === "down"
-      ? "text-emerald-600 price-flash-down"
+      ? "text-[#6ee7b7] price-flash-down"
       : flash === "up"
-        ? "text-rose-600 price-flash-up"
-        : "text-slate-900";
+        ? "text-[#fda4af] price-flash-up"
+        : "text-white";
 
   return (
     <div

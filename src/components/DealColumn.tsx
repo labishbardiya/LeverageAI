@@ -80,16 +80,16 @@ export function DealColumn({
     <section className="flex h-full min-h-0 flex-col gap-3.5">
       <header className="flex items-start justify-between gap-2">
         <div>
-          <p className="label-section">Your deal</p>
-          <h2 className="mt-0.5 text-[17px] font-medium tracking-tight text-[var(--color-ink)]">
+          <p className="label-section !text-[var(--glass-text-muted)]">Your deal</p>
+          <h2 className="mt-0.5 text-[17px] font-medium tracking-tight text-[var(--glass-text)]">
             {copy.deal_column_title}
           </h2>
-          <p className="text-[13px] text-[var(--color-smoke)]">
+          <p className="text-[13px] text-[var(--glass-text-secondary)]">
             Review layer ranks all three outcomes
           </p>
           {bench?.source && (
             <p
-              className="mt-1 text-[10px] text-[var(--color-ash)]"
+              className="mt-1 text-[10px] text-[var(--glass-text-muted)]"
               title={bench.source}
             >
               Fair band{" "}
@@ -115,18 +115,18 @@ export function DealColumn({
           {phase === "calling" ? (
             <>
               <div className="mb-3 flex gap-1.5" aria-hidden>
-                <span className="agent-activity-dot !bg-[var(--color-ink)] !shadow-none" />
-                <span className="agent-activity-dot !bg-[var(--color-ink)] !shadow-none" />
-                <span className="agent-activity-dot !bg-[var(--color-ink)] !shadow-none" />
+                <span className="agent-activity-dot !bg-white !shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
+                <span className="agent-activity-dot !bg-white !shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
+                <span className="agent-activity-dot !bg-white !shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
               </div>
-              <p className="text-sm text-[var(--color-smoke)]">
+              <p className="text-sm text-[var(--glass-text-secondary)]">
                 Three agents negotiating in parallel.
                 <br />
                 Your deal appears when they finish.
               </p>
             </>
           ) : (
-            <p className="text-sm text-[var(--color-ash)]">
+            <p className="text-sm text-[var(--glass-text-muted)]">
               Confirm your job to start simultaneous negotiations.
             </p>
           )}
@@ -167,34 +167,34 @@ export function DealColumn({
 
 function ReviewHero({ review }: { review: DealReviewUi }) {
   return (
-    <article className="glass-inner p-4 ring-1 ring-white/70">
-      <p className="label-section">Recommended</p>
-      <h3 className="mt-1 text-lg font-medium leading-snug text-[var(--color-ink)]">
+    <article className="glass-inner p-4 ring-1 ring-white/25">
+      <p className="label-section !text-[var(--glass-text-muted)]">Recommended</p>
+      <h3 className="mt-1 text-lg font-medium leading-snug text-[var(--glass-text)]">
         {review.headline}
       </h3>
       {review.top_pick?.total != null && (
-        <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight text-[var(--color-ink)]">
+        <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight text-white">
           {formatUsd(review.top_pick.total)}
         </p>
       )}
       {review.top_pick && (
-        <p className="mt-1 text-xs font-medium text-[var(--color-smoke)]">
+        <p className="mt-1 text-xs font-medium text-[var(--glass-text-secondary)]">
           {review.top_pick.label}
           {review.top_pick.red_flag ? " · flagged" : " · clean quote"}
         </p>
       )}
 
       <div className="mt-3">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-ash)]">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--glass-text-muted)]">
           Why this one
         </p>
         <ul className="mt-1.5 space-y-1.5">
           {review.why_top.map((line, i) => (
             <li
               key={i}
-              className="flex gap-2 text-sm leading-snug text-[var(--color-graphite)]"
+              className="flex gap-2 text-sm leading-snug text-[var(--glass-text-secondary)]"
             >
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-ink)]" />
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-white/70" />
               <span>{line}</span>
             </li>
           ))}
@@ -202,11 +202,11 @@ function ReviewHero({ review }: { review: DealReviewUi }) {
       </div>
 
       {review.how_others_compared.length > 0 && (
-        <details className="mt-3 rounded-xl border border-white/45 bg-white/35 p-2.5">
-          <summary className="cursor-pointer text-xs font-medium text-[var(--color-graphite)]">
+        <details className="mt-3 rounded-xl border border-white/15 bg-white/[0.06] p-2.5">
+          <summary className="cursor-pointer text-xs font-medium text-[var(--glass-text)]">
             How the other two compared
           </summary>
-          <ul className="mt-2 space-y-1.5 text-xs leading-snug text-[var(--color-smoke)]">
+          <ul className="mt-2 space-y-1.5 text-xs leading-snug text-[var(--glass-text-secondary)]">
             {review.how_others_compared.map((line, i) => (
               <li key={i}>• {line}</li>
             ))}
@@ -214,11 +214,11 @@ function ReviewHero({ review }: { review: DealReviewUi }) {
         </details>
       )}
 
-      <details className="mt-2 rounded-xl border border-white/45 bg-white/35 p-2.5">
-        <summary className="cursor-pointer text-xs font-medium text-[var(--color-graphite)]">
+      <details className="mt-2 rounded-xl border border-white/15 bg-white/[0.06] p-2.5">
+        <summary className="cursor-pointer text-xs font-medium text-[var(--glass-text)]">
           How multi-agent negotiation worked
         </summary>
-        <ul className="mt-2 space-y-1 text-xs text-[var(--color-smoke)]">
+        <ul className="mt-2 space-y-1 text-xs text-[var(--glass-text-secondary)]">
           {review.how_we_negotiated.map((line, i) => (
             <li key={i}>• {line}</li>
           ))}
@@ -226,13 +226,13 @@ function ReviewHero({ review }: { review: DealReviewUi }) {
       </details>
 
       <div className="mt-3 flex items-center gap-2">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/40">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
           <div
-            className="h-1.5 rounded-full bg-[var(--color-ink)]"
+            className="h-1.5 rounded-full bg-white/85"
             style={{ width: `${Math.min(100, review.confidence)}%` }}
           />
         </div>
-        <span className="text-[11px] tabular-nums text-[var(--color-smoke)]">
+        <span className="text-[11px] tabular-nums text-[var(--glass-text-muted)]">
           {review.confidence}% confidence
         </span>
       </div>
@@ -332,30 +332,30 @@ function DealCard({
   return (
     <article
       className={`glass-inner p-3.5 ${
-        deal.recommended ? "ring-1 ring-[var(--color-ink)]/20" : ""
+        deal.recommended ? "ring-1 ring-white/35" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-[var(--color-ash)]">
+            <span className="text-xs font-medium text-[var(--glass-text-muted)]">
               #{deal.rank}
             </span>
-            <h3 className="font-medium text-[var(--color-ink)]">
+            <h3 className="font-medium text-[var(--glass-text)]">
               {s.vendor_name}
             </h3>
             {deal.recommended && (
-              <span className="rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[11px] font-medium text-white">
+              <span className="rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-[#0c0b0a]">
                 Top pick
               </span>
             )}
           </div>
           {price != null ? (
-            <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-[var(--color-ink)]">
+            <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-white">
               {formatUsd(price)}
             </p>
           ) : (
-            <p className="mt-1 text-sm font-medium text-[var(--color-smoke)]">
+            <p className="mt-1 text-sm font-medium text-[var(--glass-text-secondary)]">
               {s.outcome === "documented_decline"
                 ? "Documented decline"
                 : s.outcome === "callback_commitment"
@@ -367,45 +367,45 @@ function DealCard({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="text-xs font-medium text-[var(--color-smoke)] hover:text-[var(--color-ink)]"
+          className="text-xs font-medium text-[var(--glass-text-muted)] hover:text-[var(--glass-text)]"
         >
           {open ? "Hide" : "Details"}
         </button>
       </div>
 
       {deal.red_flag && deal.red_flag_pct != null && (
-        <div className="mt-2 rounded-xl bg-[rgba(255,240,236,0.75)] px-3 py-2 text-xs font-medium text-[#9f3a2a] ring-1 ring-[rgba(255,107,74,0.25)]">
+        <div className="mt-2 rounded-xl bg-[rgba(255,120,90,0.2)] px-3 py-2 text-xs font-medium text-[#ffc9b8] ring-1 ring-[rgba(255,140,110,0.3)]">
           {redBanner(vertical, deal.red_flag_pct)}
         </div>
       )}
 
       {deal.why && (
-        <p className="mt-2 text-sm text-[var(--color-smoke)]">{deal.why}</p>
+        <p className="mt-2 text-sm text-[var(--glass-text-secondary)]">{deal.why}</p>
       )}
 
       {s.callback_at && (
-        <p className="mt-1 text-xs text-[var(--color-smoke)]">
-          Callback: <span className="font-medium">{s.callback_at}</span>
+        <p className="mt-1 text-xs text-[var(--glass-text-muted)]">
+          Callback: <span className="font-medium text-[var(--glass-text-secondary)]">{s.callback_at}</span>
         </p>
       )}
 
       {open && s.line_items?.length > 0 && (
-        <ul className="mt-3 space-y-1.5 border-t border-white/35 pt-3">
+        <ul className="mt-3 space-y-1.5 border-t border-white/10 pt-3">
           {s.line_items.map((li, i) => (
             <li
               key={`${li.label}-${i}`}
               className="flex items-center justify-between gap-2 text-sm"
             >
-              <span className="text-[var(--color-graphite)]">{li.label}</span>
+              <span className="text-[var(--glass-text-secondary)]">{li.label}</span>
               <span className="flex items-center gap-2">
-                <span className="tabular-nums font-medium text-[var(--color-ink)]">
+                <span className="tabular-nums font-medium text-white">
                   {formatUsd(li.amount)}
                 </span>
                 {li.evidence_ts != null && (
                   <button
                     type="button"
                     onClick={() => onListen(s.vendor_id, li.evidence_ts!)}
-                    className="text-[11px] font-medium text-[var(--color-ink)] underline-offset-2 hover:underline"
+                    className="text-[11px] font-medium text-white underline-offset-2 hover:underline"
                   >
                     Listen
                   </button>
@@ -417,14 +417,14 @@ function DealCard({
       )}
 
       {open && chain.length > 0 && (
-        <div className="mt-3 rounded-xl border border-white/45 bg-white/35 p-3">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-ash)]">
+        <div className="mt-3 rounded-xl border border-white/15 bg-white/[0.06] p-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--glass-text-muted)]">
             Leverage chain
           </p>
           <ol className="mt-2 space-y-1.5">
             {chain.map((step, i) => (
-              <li key={i} className="text-xs text-[var(--color-graphite)]">
-                <span className="font-mono text-[var(--color-smoke)]">
+              <li key={i} className="text-xs text-[var(--glass-text-secondary)]">
+                <span className="font-mono text-[var(--glass-text-muted)]">
                   [t={formatTs(step.t_ms)}]
                 </span>{" "}
                 {step.label}
@@ -435,7 +435,7 @@ function DealCard({
       )}
 
       {open && (
-        <p className="mt-2 text-xs text-[var(--color-ash)]">
+        <p className="mt-2 text-xs text-[var(--glass-text-muted)]">
           {replay || !s.audio_url
             ? "Recording available in live mode — transcript shown."
             : "Live recording attached."}
@@ -446,7 +446,7 @@ function DealCard({
         <button
           type="button"
           onClick={downloadTranscript}
-          className="rounded-full border border-white/50 bg-white/40 px-2.5 py-1.5 text-xs font-medium text-[var(--color-graphite)] hover:bg-white/65"
+          className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs font-medium text-[var(--glass-text)] hover:bg-white/18"
         >
           Download transcript
         </button>
@@ -457,7 +457,7 @@ function DealCard({
             type="button"
             onClick={downloadAudio}
             disabled
-            className="rounded-full border border-white/40 px-2.5 py-1.5 text-xs font-medium text-[var(--color-ash)]"
+            className="rounded-full border border-white/15 px-2.5 py-1.5 text-xs font-medium text-[var(--glass-text-muted)]"
           >
             Play audio (live only)
           </button>

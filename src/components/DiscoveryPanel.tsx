@@ -80,33 +80,33 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
   return (
     <div className="glass-inner space-y-3.5 p-3.5">
       <div>
-        <p className="label-section">Market discovery</p>
-        <h3 className="mt-0.5 text-base font-medium text-[var(--color-ink)]">
+        <p className="label-section !text-[var(--glass-text-muted)]">Market discovery</p>
+        <h3 className="mt-0.5 text-base font-medium text-[var(--glass-text)]">
           Local market · ZIP {zip}
         </h3>
-        <p className="mt-1 text-xs text-[var(--color-smoke)]">
+        <p className="mt-1 text-xs text-[var(--glass-text-secondary)]">
           {source || "Loading…"}
         </p>
         {attribution && (
-          <p className="mt-1 text-[10px] text-[var(--color-ash)]">
+          <p className="mt-1 text-[10px] text-[var(--glass-text-muted)]">
             {attribution}
           </p>
         )}
       </div>
 
       {loading ? (
-        <p className="text-sm text-[var(--color-ash)]">Finding providers…</p>
+        <p className="text-sm text-[var(--glass-text-muted)]">Finding providers…</p>
       ) : (
         <>
-          <div className="rounded-xl border border-white/45 bg-white/30 p-3">
-            <p className="text-xs font-medium text-[var(--color-graphite)]">
+          <div className="rounded-xl border border-white/15 bg-white/[0.06] p-3">
+            <p className="text-xs font-medium text-[var(--glass-text)]">
               Agents will call these 3
             </p>
             <ul className="mt-2 space-y-3">
               {top3.map((p, i) => (
                 <li
                   key={p.place_id || i}
-                  className="rounded-xl border border-white/50 bg-white/45 p-2.5"
+                  className="rounded-xl border border-white/12 bg-white/[0.06] p-2.5"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -221,14 +221,14 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
         </>
       )}
 
-      <div className="rounded-xl border border-white/40 bg-white/25 p-3">
-        <p className="text-xs font-medium text-[var(--color-graphite)]">
+      <div className="rounded-xl border border-white/12 bg-white/[0.05] p-3">
+        <p className="text-xs font-medium text-[var(--glass-text)]">
           Negotiation styles
         </p>
-        <ul className="mt-1 space-y-1 text-xs text-[var(--color-smoke)]">
+        <ul className="mt-1 space-y-1 text-xs text-[var(--glass-text-secondary)]">
           {personas.map((v) => (
             <li key={v.id}>
-              <span className="font-medium text-[var(--color-ink)]">
+              <span className="font-medium text-[var(--glass-text)]">
                 {vendorDisplayName(v)}
               </span>
               {" — "}
@@ -237,7 +237,7 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
           ))}
         </ul>
         {caption && (
-          <p className="mt-2 text-[11px] leading-snug text-[var(--color-ash)]">
+          <p className="mt-2 text-[11px] leading-snug text-[var(--glass-text-muted)]">
             {caption}
           </p>
         )}
@@ -251,8 +251,8 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
       >
         {busy ? "Starting agents…" : "Start negotiations"}
       </button>
-      <p className="text-center text-[10px] text-[var(--color-ash)]">
-        Live multi-agent run — transcripts stream as they land.
+      <p className="text-center text-[10px] text-[var(--glass-text-muted)]">
+        Live multi-agent run — chats stream as they land.
       </p>
     </div>
   );

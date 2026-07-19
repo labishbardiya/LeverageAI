@@ -195,18 +195,18 @@ export function JobColumn({
   return (
     <section className="flex h-full min-h-0 flex-col gap-3.5">
       <header>
-        <p className="label-section">Job</p>
-        <h2 className="mt-0.5 text-[17px] font-medium tracking-tight text-[var(--color-ink)]">
+        <p className="label-section !text-[var(--glass-text-muted)]">Job</p>
+        <h2 className="mt-0.5 text-[17px] font-medium tracking-tight text-[var(--glass-text)]">
           {copy.job_column_title}
         </h2>
-        <p className="text-[13px] text-[var(--color-smoke)]">
+        <p className="text-[13px] text-[var(--glass-text-secondary)]">
           {vertical.displayName || vertical.label || vertical.name}
         </p>
       </header>
 
       <div className="glass-inner p-3.5">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-[var(--color-graphite)]">
+          <p className="text-sm font-medium text-[var(--glass-text)]">
             {copy.voice_intake_label}
           </p>
           <button
@@ -219,17 +219,17 @@ export function JobColumn({
             Start voice intake
           </button>
           {voiceStatus && (
-            <p className="rounded-lg bg-white/50 px-2.5 py-1.5 text-xs text-[var(--color-graphite)]">
+            <p className="rounded-lg bg-white/10 px-2.5 py-1.5 text-xs text-[var(--glass-text-secondary)]">
               {voiceStatus}
               {intakeId ? (
-                <span className="mt-0.5 block text-[10px] text-[var(--color-ash)]">
+                <span className="mt-0.5 block text-[10px] text-[var(--glass-text-muted)]">
                   intake_id: {intakeId.slice(0, 8)}…
                 </span>
               ) : null}
             </p>
           )}
-          <p className="text-xs leading-relaxed text-[var(--color-smoke)]">
-            Speak your job, then say <strong>“submit the job”</strong>. The
+          <p className="text-xs leading-relaxed text-[var(--glass-text-muted)]">
+            Speak your job, then say <strong className="text-[var(--glass-text-secondary)]">“submit the job”</strong>. The
             form fills automatically.
           </p>
         </div>
@@ -244,18 +244,18 @@ export function JobColumn({
         onDrop={onDrop}
         className={`rounded-2xl border border-dashed p-3.5 text-center transition-colors ${
           dragOver
-            ? "border-[var(--color-ink)]/30 bg-white/50"
-            : "border-white/50 bg-white/20"
+            ? "border-white/40 bg-white/12"
+            : "border-white/20 bg-white/[0.04]"
         }`}
       >
-        <p className="text-sm text-[var(--color-smoke)]">
+        <p className="text-sm text-[var(--glass-text-secondary)]">
           {copy.pdf_upload_label}
         </p>
         <button
           type="button"
           disabled={locked}
           onClick={() => fileRef.current?.click()}
-          className="mt-1.5 text-sm font-medium text-[var(--color-ink)] underline-offset-2 hover:underline disabled:opacity-40"
+          className="mt-1.5 text-sm font-medium text-[var(--glass-text)] underline-offset-2 hover:underline disabled:opacity-40"
         >
           Choose PDF
         </button>
@@ -270,7 +270,7 @@ export function JobColumn({
           }}
         />
         {uploadMsg && (
-          <p className="mt-2 text-xs text-[var(--color-smoke)]">{uploadMsg}</p>
+          <p className="mt-2 text-xs text-[var(--glass-text-muted)]">{uploadMsg}</p>
         )}
       </div>
 
@@ -285,7 +285,7 @@ export function JobColumn({
 
       <div className="glass-inner min-h-0 flex-1 overflow-auto p-3.5">
         {!hasSpec ? (
-          <p className="text-sm text-[var(--color-ash)]">
+          <p className="text-sm text-[var(--glass-text-muted)]">
             Job details appear after voice, PDF, or demo job.
           </p>
         ) : (
@@ -296,10 +296,10 @@ export function JobColumn({
               return (
                 <div
                   key={f.key}
-                  className="flex justify-between gap-3 border-b border-white/30 pb-1.5"
+                  className="flex justify-between gap-3 border-b border-white/10 pb-1.5"
                 >
-                  <dt className="text-[var(--color-smoke)]">{f.label}</dt>
-                  <dd className="text-right font-medium text-[var(--color-ink)]">
+                  <dt className="text-[var(--glass-text-muted)]">{f.label}</dt>
+                  <dd className="text-right font-medium text-[var(--glass-text)]">
                     {String(val)}
                   </dd>
                 </div>
