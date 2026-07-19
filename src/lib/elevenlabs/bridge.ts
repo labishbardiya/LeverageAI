@@ -515,7 +515,7 @@ export async function runAgentBridge(
         ) {
           sendUserMessage(to, trimmed);
         }
-      }, 4_000);
+      }, 1_500);
     }
   };
 
@@ -587,7 +587,6 @@ export async function runAgentBridge(
       seen: Set<string>
     ) => {
       from.on("message", (raw) => {
-        touch();
         const msg = asObj(raw);
         if (!msg) return;
 
@@ -606,10 +605,18 @@ export async function runAgentBridge(
           return;
         }
 
+        // Ping is transport health, not call progress. Counting it as activity
+        // kept stalled conversations alive forever instead of failing honestly.
+        touch();
+
         const audioChunk = extractAudioChunk(msg);
         if (audioChunk && to.readyState === WebSocket.OPEN && !closed) {
           audioForwarded[fromRole] = true;
           sendUserAudio(to, audioChunk);
+          scheduleAudioTurnEnd(fromRole, to);
+        }
+
+        if (msg.type === "agent_response_complete") {
           scheduleAudioTurnEnd(fromRole, to);
         }
 
