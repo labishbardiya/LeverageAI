@@ -136,7 +136,7 @@ function CallCard({
       <div className="px-3 pt-2.5">
         <PriceDisplay
           price={session.current_price}
-          className="!text-[2rem] !text-white"
+          className="!text-[2rem] !text-[var(--ink)]"
         />
       </div>
 

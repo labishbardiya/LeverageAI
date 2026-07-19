@@ -3,8 +3,9 @@
 import { ProductWorkspace } from "./ProductWorkspace";
 
 /**
- * Judge-facing product shell — clean Claude-style workspace.
- * Sample golden replay lives at /demo?replay=true
+ * Judge-facing product shell — full live product at `/`.
+ * Sample golden replay: `/live` (or `/live?replay=true`).
+ * Alias: `/livee` → same ProductWorkspace.
  */
 export function AppHome() {
   return <ProductWorkspace />;

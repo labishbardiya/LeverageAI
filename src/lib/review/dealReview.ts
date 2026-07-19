@@ -3,6 +3,8 @@
  * and produces a single recommended deal with plain-language reasoning.
  *
  * Deterministic (no paid LLM): always works in live demos.
+ * Fallback: if tools missed logging but transcripts have prices, still produce
+ * a deal from parsed totals when sessions are terminal.
  */
 import type {
   Job,
@@ -49,6 +51,8 @@ export type DealReview = {
   /** Full ordered verdicts for UI */
   verdicts: DealReviewVerdict[];
   generated_at: string;
+  /** True when totals came from transcript parse, not log_quote */
+  from_transcript_fallback?: boolean;
 };
 
 function formatUsd(n: number): string {
@@ -62,6 +66,47 @@ function formatUsd(n: number): string {
 function pctBelow(mid: number, total: number): number {
   if (mid <= 0) return 0;
   return Math.round(((mid - total) / mid) * 100);
+}
+
+/** Parse $ amounts from free text (bridge / live without tool webhooks). */
+export function parsePricesFromTranscriptText(text: string): number[] {
+  const out: number[] = [];
+  const re =
+    /\$\s*([\d,]+(?:\.\d{1,2})?)|([\d,]+(?:\.\d{1,2})?)\s*(?:dollars?)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const raw = (m[1] || m[2] || "").replace(/,/g, "");
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 50 && n <= 500_000) out.push(Math.round(n));
+  }
+  return out;
+}
+
+/**
+ * Best spoken total for a session when quotes are missing.
+ * Prefers last vendor-spoken price (itemized final, not teaser min).
+ */
+export function inferTotalFromTranscripts(
+  sessionId: string,
+  transcripts: TranscriptEvent[]
+): number | null {
+  const lines = transcripts
+    .filter((t) => t.session_id === sessionId)
+    .sort((a, b) => a.ts_ms - b.ts_ms);
+
+  let lastVendor: number | null = null;
+  let lastAny: number | null = null;
+  for (const line of lines) {
+    const prices = parsePricesFromTranscriptText(line.text);
+    if (!prices.length) continue;
+    // Last $ in the line is usually the revised/all-in figure
+    const n = prices[prices.length - 1]!;
+    lastAny = n;
+    if (line.speaker === "vendor" || line.speaker === "agent") {
+      lastVendor = n;
+    }
+  }
+  return lastVendor ?? lastAny;
 }
 
 /**
@@ -101,6 +146,7 @@ export function buildDealReview(input: {
   const thrPct = vertical
     ? Math.round((vertical.red_flag.threshold_below_benchmark || 0.3) * 100)
     : 30;
+  const thrFrac = vertical?.red_flag.threshold_below_benchmark ?? 0.3;
 
   // Latest quote per session
   const latestBySession = new Map<string, Quote>();
@@ -111,10 +157,29 @@ export function buildDealReview(input: {
     }
   }
 
+  let usedTranscriptFallback = false;
+
+  const totalsBySession = new Map<string, number | null>();
+  for (const s of input.sessions) {
+    const q = latestBySession.get(s.id);
+    let total = s.current_total ?? q?.total ?? null;
+    if (total == null && input.transcripts?.length) {
+      const inferred = inferTotalFromTranscripts(s.id, input.transcripts);
+      if (inferred != null) {
+        total = inferred;
+        usedTranscriptFallback = true;
+      }
+    }
+    totalsBySession.set(s.id, total);
+  }
+
   const verdicts: DealReviewVerdict[] = input.sessions.map((s) => {
     const q = latestBySession.get(s.id);
-    const total = s.current_total ?? q?.total ?? null;
-    const red = Boolean(q?.red_flag);
+    const total = totalsBySession.get(s.id) ?? null;
+    let red = Boolean(q?.red_flag);
+    if (!red && mid != null && total != null && total < mid * (1 - thrFrac)) {
+      red = true;
+    }
     const rfPct =
       mid != null && total != null && total < mid
         ? pctBelow(mid, total)
@@ -126,25 +191,23 @@ export function buildDealReview(input: {
     if (s.outcome_type === "documented_decline") {
       label = "Would not quote by phone";
       plain = `${s.vendor_name} refused a firm phone price${
-        s.callback_window ? ` and offered a callback (${s.callback_window})` : ""
-      }. That is logged so you are not left waiting without a record.`;
+        s.callback_window ? ` — callback: ${s.callback_window}` : ""
+      }.`;
     } else if (s.outcome_type === "callback_commitment") {
       label = "Callback only";
-      plain = `${s.vendor_name} only committed to call you back${
+      plain = `${s.vendor_name} committed to call back${
         s.callback_window ? ` (${s.callback_window})` : ""
       } — no installed total yet.`;
     } else if (total != null && red) {
       label = "Too cheap to trust alone";
-      plain = `${s.vendor_name} quoted ${formatUsd(total)}, which is about ${
+      plain = `${s.vendor_name} at ${formatUsd(total)} (~${
         rfPct ?? thrPct
-      }% under the typical market mid${
-        mid != null ? ` (${formatUsd(mid)})` : ""
-      }. That often means missing fees or a bait price, so we do not recommend it as #1.`;
+      }% under market mid${mid != null ? ` ${formatUsd(mid)}` : ""}). Bait risk.`;
     } else if (total != null) {
-      label = "Clean itemized quote";
-      plain = `${s.vendor_name} gave a full itemized total of ${formatUsd(
-        total
-      )}${mid != null ? ` — near the fair mid of about ${formatUsd(mid)}` : ""}.`;
+      label = q ? "Clean itemized quote" : "Spoken total (parsed)";
+      plain = `${s.vendor_name}: ${formatUsd(total)}${
+        mid != null ? ` (fair mid ~${formatUsd(mid)})` : ""
+      }.`;
     }
 
     return {
@@ -159,75 +222,115 @@ export function buildDealReview(input: {
     };
   });
 
-  // Winner from ranked (is_winner) or first non-red itemized
+  // Winner from ranked (is_winner) or first non-red with a total
   const winnerRanked = input.ranked.find((r) => r.is_winner && !r.red_flag);
-  const winnerSession = winnerRanked
+  let winnerSession = winnerRanked
     ? input.sessions.find((s) => s.id === winnerRanked.session_id)
-    : input.sessions.find((s) => {
-        const q = latestBySession.get(s.id);
-        return (
-          s.outcome_type === "itemized_quote" &&
-          q &&
-          !q.red_flag &&
-          (s.current_total ?? q.total) != null
-        );
-      });
+    : undefined;
+
+  if (!winnerSession) {
+    const candidates = input.sessions
+      .map((s) => ({
+        s,
+        total: totalsBySession.get(s.id),
+        red: verdicts.find((v) => v.vendor_id === s.vendor_id)?.red_flag,
+      }))
+      .filter(
+        (c) =>
+          c.total != null &&
+          !c.red &&
+          c.s.outcome_type !== "documented_decline" &&
+          c.s.outcome_type !== "callback_commitment"
+      )
+      .sort((a, b) => (a.total ?? 0) - (b.total ?? 0));
+    winnerSession = candidates[0]?.s;
+
+    // If all itemized are red, still pick lowest non-callback as informative (not ideal)
+    if (!winnerSession) {
+      const anyPriced = input.sessions
+        .map((s) => ({ s, total: totalsBySession.get(s.id) }))
+        .filter(
+          (c) =>
+            c.total != null &&
+            c.s.outcome_type !== "documented_decline" &&
+            c.s.outcome_type !== "callback_commitment"
+        )
+        .sort((a, b) => (a.total ?? 0) - (b.total ?? 0));
+      // Prefer non-red; if none, leave null top_pick
+      const nonRed = anyPriced.filter(
+        (c) => !verdicts.find((v) => v.vendor_id === c.s.vendor_id)?.red_flag
+      );
+      winnerSession = nonRed[0]?.s;
+    }
+  }
 
   const top_pick = winnerSession
-    ? verdicts.find((v) => v.vendor_id === winnerSession.vendor_id) ?? null
+    ? verdicts.find((v) => v.vendor_id === winnerSession!.vendor_id) ?? null
     : null;
 
-  // Concise, strong, jargon-free — 1–2 bullets max
   const why_top: string[] = [];
   if (top_pick && top_pick.total != null) {
     why_top.push(
-      `${top_pick.vendor_name} at ${formatUsd(top_pick.total)}: full itemized price, not a teaser.`
+      `${top_pick.vendor_name} at ${formatUsd(top_pick.total)} — best clean total.`
     );
     if (mid != null) {
-      why_top.push(`In line with the market mid (~${formatUsd(mid)}), not suspiciously low.`);
+      why_top.push(`Near market mid (~${formatUsd(mid)}), not a bait teaser.`);
     }
-    const chain = buildLeverageChain({
-      session_id: winnerSession!.id,
-      quotes: input.quotes,
-      tool_calls: input.tool_calls || [],
-      transcripts: input.transcripts || [],
-    });
-    if (chain.some((c) => c.kind === "get_competing_bids")) {
-      why_top.push("Price dropped after we showed a real competing bid from this same job.");
+    if (winnerSession) {
+      const chain = buildLeverageChain({
+        session_id: winnerSession.id,
+        quotes: input.quotes,
+        tool_calls: input.tool_calls || [],
+        transcripts: input.transcripts || [],
+      });
+      if (chain.some((c) => c.kind === "get_competing_bids")) {
+        why_top.push("Price moved after a real competing bid from this job.");
+      }
     }
   } else {
-    why_top.push("No clean winner yet. Check callbacks below or run again.");
+    why_top.push("No clean winner — check callbacks or re-run.");
   }
 
   const how_others_compared = verdicts
     .filter((v) => !top_pick || v.vendor_id !== top_pick.vendor_id)
     .map((v) => {
       if (v.red_flag && v.total != null) {
-        return `${v.vendor_name}: ${formatUsd(v.total)} — too far under market (risk of hidden fees).`;
+        return `${v.vendor_name}: ${formatUsd(v.total)} — under market (fee risk).`;
       }
-      if (v.outcome === "documented_decline" || v.outcome === "callback_commitment") {
-        return `${v.vendor_name}: no firm price on the phone.`;
+      if (
+        v.outcome === "documented_decline" ||
+        v.outcome === "callback_commitment"
+      ) {
+        return `${v.vendor_name}: no firm phone price.`;
       }
       if (v.total != null) return `${v.vendor_name}: ${formatUsd(v.total)}.`;
       return `${v.vendor_name}: no quote.`;
     });
 
   const how_we_negotiated = [
-    "Three agents negotiated at the same time.",
-    "We only accept full itemized totals — bait prices never win.",
+    "Three agents negotiated in parallel.",
+    "Only full itemized (or spoken firm) totals rank; bait prices don't win.",
   ];
+  if (usedTranscriptFallback) {
+    how_we_negotiated.push(
+      "Some totals recovered from call transcripts when tools did not log."
+    );
+  }
 
-  // Confidence: more complete outcomes + clean winner → higher
   let confidence = 40;
-  const closed = input.sessions.filter((s) => s.outcome_type).length;
+  const closed = input.sessions.filter(
+    (s) =>
+      s.outcome_type ||
+      s.status === "closed" ||
+      s.status === "error"
+  ).length;
   confidence += closed * 12;
   if (top_pick) confidence += 20;
   if (top_pick && !top_pick.red_flag) confidence += 10;
-  if (
-    input.tool_calls?.some((t) => t.tool_name === "get_competing_bids")
-  ) {
+  if (input.tool_calls?.some((t) => t.tool_name === "get_competing_bids")) {
     confidence += 8;
   }
+  if (usedTranscriptFallback) confidence -= 12;
   confidence = Math.min(96, Math.max(25, confidence));
 
   const headline = top_pick
@@ -245,5 +348,6 @@ export function buildDealReview(input: {
     confidence,
     verdicts,
     generated_at: new Date().toISOString(),
+    from_transcript_fallback: usedTranscriptFallback || undefined,
   };
 }

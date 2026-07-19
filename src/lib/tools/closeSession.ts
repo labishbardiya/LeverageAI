@@ -128,8 +128,19 @@ export async function closeSession(raw: unknown): Promise<CloseSessionResult> {
       const quotes = await store.listQuotesByJob(session.job_id);
       const sessionQuotes = quotes
         .filter((q) => q.session_id === session_id)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
         .map((q) => q.total)
         .filter((n): n is number => typeof n === "number");
+      const priceHistory =
+        sessionQuotes.length >= 2
+          ? sessionQuotes
+          : session.current_total != null && sessionQuotes.length === 1
+            ? [...sessionQuotes, session.current_total]
+            : sessionQuotes.length
+              ? sessionQuotes
+              : session.current_total != null
+                ? [session.current_total]
+                : [];
       const { extractLearningsFromSession } = await import(
         "@/lib/learning/extract"
       );
@@ -140,12 +151,7 @@ export async function closeSession(raw: unknown): Promise<CloseSessionResult> {
           text: t.text,
           ts_ms: t.ts_ms,
         })),
-        priceHistory:
-          sessionQuotes.length >= 2
-            ? sessionQuotes
-            : session.current_total != null
-              ? [session.current_total]
-              : [],
+        priceHistory,
       });
     } catch {
       /* learning is non-critical */

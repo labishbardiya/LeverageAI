@@ -146,7 +146,7 @@
       "role": "tough",
       "persona": "tough",
       "role_label": "The careful one",
-      "nature": "The careful one — quality parts and labor; won't race to the cheapest fix.",
+      "nature": "Quality parts firm labor",
       "public_blurb": "Independent shop known for thorough diagnostics and OEM-grade parts.",
       "pricing_strategy_secret": "Opens high on parts+labor; concedes when a real competing written bid is cited; floor near mid.",
       "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI."
@@ -158,7 +158,7 @@
       "role": "stonewaller",
       "persona": "stonewaller",
       "role_label": "The cautious one",
-      "nature": "The cautious one — wants the car in the bay before locking a price.",
+      "nature": "Inspect before pricing",
       "public_blurb": "Neighborhood garage — prefers in-person inspection first.",
       "pricing_strategy_secret": "Refuses firm phone quotes; callback after inspection only.",
       "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI."
@@ -170,7 +170,7 @@
       "role": "upseller",
       "persona": "upseller",
       "role_label": "The bargain front",
-      "nature": "The bargain front — low labor teaser; fluids, fees, and upsells stack later.",
+      "nature": "Low labor fee stack",
       "public_blurb": "Budget-friendly repairs with same-week slots.",
       "pricing_strategy_secret": "Lowballs labor then layers shop fees, fluids, and recommended extras; may red-flag vs mid.",
       "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI."

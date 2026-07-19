@@ -29,6 +29,15 @@ function lineItems(
   return parts.map((p, i) => ({ label: p.label, amount: amounts[i]! }));
 }
 
+/** Relative ms from track start — UI shows 0:01, 0:02 not wall-clock junk. */
+const trackStart = new Map<string, number>();
+
+function relTs(sessionId: string, scriptedMs: number): number {
+  if (!trackStart.has(sessionId)) trackStart.set(sessionId, Date.now());
+  // Prefer scripted relative offsets (already 1000, 2000, …)
+  return Math.max(0, scriptedMs);
+}
+
 async function say(
   sessionId: string,
   jobId: string,
@@ -37,7 +46,13 @@ async function say(
   ts_ms: number
 ) {
   const store = getStore();
-  await store.appendTranscript({ session_id: sessionId, ts_ms, speaker, text });
+  const relative = relTs(sessionId, ts_ms);
+  await store.appendTranscript({
+    session_id: sessionId,
+    ts_ms: relative,
+    speaker,
+    text,
+  });
   await store.updateSession(sessionId, {
     status: "live",
     last_event_at: new Date().toISOString(),
@@ -46,7 +61,7 @@ async function say(
     type: "transcript",
     job_id: jobId,
     session_id: sessionId,
-    payload: { speaker, text, ts_ms },
+    payload: { speaker, text, ts_ms: relative },
   });
 }
 

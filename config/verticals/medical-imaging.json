@@ -141,7 +141,7 @@
       "role": "tough",
       "persona": "tough",
       "role_label": "The careful one",
-      "nature": "The careful one — clear cash price, won't undercut quality or rush reads.",
+      "nature": "Clear cash quality reads",
       "public_blurb": "Imaging center with transparent cash-pay MRI pricing.",
       "pricing_strategy_secret": "Opens near high of cash band; concedes when a real competing cash quote is cited; floor near mid.",
       "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI."
@@ -153,7 +153,7 @@
       "role": "stonewaller",
       "persona": "stonewaller",
       "role_label": "The cautious one",
-      "nature": "The cautious one — wants referral paperwork before locking a cash number.",
+      "nature": "Referral before cash price",
       "public_blurb": "Regional imaging — prefers order on file before firm cash quotes.",
       "pricing_strategy_secret": "Refuses firm phone cash price without referral; callback only.",
       "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI."
@@ -165,7 +165,7 @@
       "role": "upseller",
       "persona": "upseller",
       "role_label": "The bargain front",
-      "nature": "The bargain front — low exam fee; contrast and facility add-ons stack later.",
+      "nature": "Low exam fee stack",
       "public_blurb": "Fast cash MRI slots with competitive headline rates.",
       "pricing_strategy_secret": "Lowballs facility fee then layers contrast, CD, and read fees; may red-flag vs mid.",
       "_comment": "pricing_strategy_secret is NEVER sent to the negotiator agent or UI."

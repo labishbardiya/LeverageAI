@@ -2,6 +2,13 @@
  * Deterministic playbook learning from transcripts.
  * Tactics: cite_competing_bid, cite_benchmark, request_itemization,
  * silence_after_anchor, ask_for_manager_price, bundle_scope_reduction
+ *
+ * Schema (Neon `negotiation_learnings`):
+ *   id uuid PK, vertical text, tactic text, context text,
+ *   outcome_delta double precision, sample_count int, updated_at timestamptz
+ *   UNIQUE (vertical, tactic)
+ *
+ * Online selector: UCB1 in bandit.ts (selectTacticsUcb → playbook dynamic var).
  */
 import { getPool, hasDatabaseUrl } from "@/lib/db/pool";
 import { randomUUID } from "crypto";
@@ -66,34 +73,38 @@ export async function upsertLearning(
 ): Promise<void> {
   if (!hasDatabaseUrl()) return;
   const pool = getPool();
-  const { rows } = await pool.query(
-    `SELECT outcome_delta, sample_count FROM negotiation_learnings
-     WHERE vertical = $1 AND tactic = $2`,
-    [vertical, tactic]
+  // Pure atomic upsert — no SELECT/UPDATE race
+  await pool.query(
+    `INSERT INTO negotiation_learnings (id, vertical, tactic, context, outcome_delta, sample_count)
+     VALUES ($1, $2, $3, '{}', $4, 1)
+     ON CONFLICT (vertical, tactic) DO UPDATE
+     SET outcome_delta = (
+           negotiation_learnings.outcome_delta * negotiation_learnings.sample_count + EXCLUDED.outcome_delta
+         ) / (negotiation_learnings.sample_count + 1),
+         sample_count = negotiation_learnings.sample_count + 1,
+         updated_at = now()`,
+    [randomUUID(), vertical, tactic, delta]
   );
-  if (rows[0]) {
-    const n = Number(rows[0].sample_count) || 0;
-    const avg = Number(rows[0].outcome_delta) || 0;
-    const newAvg = (avg * n + delta) / (n + 1);
-    await pool.query(
-      `UPDATE negotiation_learnings
-       SET outcome_delta = $3, sample_count = $4, updated_at = now()
-       WHERE vertical = $1 AND tactic = $2`,
-      [vertical, tactic, newAvg, n + 1]
-    );
-  } else {
-    await pool.query(
-      `INSERT INTO negotiation_learnings (id, vertical, tactic, context, outcome_delta, sample_count)
-       VALUES ($1, $2, $3, '{}', $4, 1)
-       ON CONFLICT (vertical, tactic) DO UPDATE
-       SET outcome_delta = (
-             negotiation_learnings.outcome_delta * negotiation_learnings.sample_count + EXCLUDED.outcome_delta
-           ) / (negotiation_learnings.sample_count + 1),
-           sample_count = negotiation_learnings.sample_count + 1,
-           updated_at = now()`,
-      [randomUUID(), vertical, tactic, delta]
-    );
+}
+
+function pricesFromTranscripts(
+  transcripts: { speaker: string; text: string; ts_ms: number }[]
+): number[] {
+  const re =
+    /\$\s*([\d,]+(?:\.\d{1,2})?)|([\d,]+(?:\.\d{1,2})?)\s*(?:dollars?)/gi;
+  const out: number[] = [];
+  const sorted = [...transcripts].sort((a, b) => a.ts_ms - b.ts_ms);
+  for (const line of sorted) {
+    if (line.speaker !== "vendor" && line.speaker !== "agent") continue;
+    let m: RegExpExecArray | null;
+    re.lastIndex = 0;
+    while ((m = re.exec(line.text)) !== null) {
+      const raw = (m[1] || m[2] || "").replace(/,/g, "");
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 50 && n <= 500_000) out.push(Math.round(n));
+    }
   }
+  return out;
 }
 
 /**
@@ -105,15 +116,26 @@ export async function extractLearningsFromSession(input: {
   priceHistory: number[];
 }): Promise<{ tactic: Tactic; delta: number }[]> {
   const events: { tactic: Tactic; delta: number }[] = [];
-  const series = input.priceHistory;
+  let series = input.priceHistory.filter((n) => typeof n === "number" && n > 0);
+  if (series.length < 2) {
+    series = pricesFromTranscripts(input.transcripts);
+  }
   if (series.length < 2) return events;
 
   let dropPct = 0;
   for (let i = 1; i < series.length; i++) {
     if (series[i]! < series[i - 1]!) {
       dropPct = ((series[i - 1]! - series[i]!) / series[i - 1]!) * 100;
-      break;
+      // keep scanning for largest meaningful drop
+      const d = ((series[i - 1]! - series[i]!) / series[i - 1]!) * 100;
+      if (d > dropPct) dropPct = d;
     }
+  }
+  // Prefer first→last overall drop when monotonic-ish
+  const first = series[0]!;
+  const last = series[series.length - 1]!;
+  if (first > last) {
+    dropPct = Math.max(dropPct, ((first - last) / first) * 100);
   }
   if (dropPct <= 0) return events;
 

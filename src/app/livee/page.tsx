@@ -1,8 +1,10 @@
 import { Suspense } from "react";
-import { AppHome } from "@/components/AppHome";
+import { ProductWorkspace } from "@/components/ProductWorkspace";
 
-/** `/` — full live product (ProductWorkspace). */
-export default function Home() {
+/**
+ * /livee — live product shell (alias of full ProductWorkspace).
+ */
+export default function LiveePage() {
   return (
     <Suspense
       fallback={
@@ -15,7 +17,7 @@ export default function Home() {
         </div>
       }
     >
-      <AppHome />
+      <ProductWorkspace />
     </Suspense>
   );
 }

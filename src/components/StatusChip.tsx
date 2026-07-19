@@ -2,12 +2,13 @@
 
 import type { CallStatus } from "@/lib/ui/types";
 
+/** Dark ink on light pills — readable on light glass and dark WA headers */
 const STYLES: Record<CallStatus, string> = {
-  idle: "bg-white/15 text-white/70 border border-white/20",
-  dialing: "bg-white/20 text-white border border-white/30",
+  idle: "bg-white/90 text-[var(--ink-muted)] border border-black/10",
+  dialing: "bg-white text-[var(--ink)] border border-black/12",
   negotiating: "bg-[#25d366] text-white border border-[#1da851]",
-  done: "bg-white/90 text-[#0c0b0a] border border-white/40",
-  declined: "bg-white/10 text-white/60 border border-white/15",
+  done: "bg-white text-[var(--ink)] border border-black/12",
+  declined: "bg-white/80 text-[var(--ink-muted)] border border-black/10",
 };
 
 const LABELS: Record<CallStatus, string> = {

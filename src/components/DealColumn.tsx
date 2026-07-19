@@ -115,9 +115,9 @@ export function DealColumn({
           {phase === "calling" ? (
             <>
               <div className="mb-3 flex gap-1.5" aria-hidden>
-                <span className="agent-activity-dot !bg-white !shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
-                <span className="agent-activity-dot !bg-white !shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
-                <span className="agent-activity-dot !bg-white !shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
+                <span className="agent-activity-dot !bg-[var(--success)] !shadow-[0_0_8px_rgba(27,122,74,0.35)]" />
+                <span className="agent-activity-dot !bg-[var(--success)] !shadow-[0_0_8px_rgba(27,122,74,0.35)]" />
+                <span className="agent-activity-dot !bg-[var(--success)] !shadow-[0_0_8px_rgba(27,122,74,0.35)]" />
               </div>
               <p className="text-sm text-[var(--glass-text-secondary)]">
                 Three agents negotiating in parallel.
@@ -173,7 +173,7 @@ function ReviewHero({ review }: { review: DealReviewUi }) {
         {review.headline}
       </h3>
       {review.top_pick?.total != null && (
-        <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight text-white">
+        <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight text-[var(--ink)]">
           {formatUsd(review.top_pick.total)}
         </p>
       )}
@@ -194,7 +194,7 @@ function ReviewHero({ review }: { review: DealReviewUi }) {
               key={i}
               className="flex gap-2 text-sm leading-snug text-[var(--glass-text-secondary)]"
             >
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-white/70" />
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--ink-muted)]" />
               <span>{line}</span>
             </li>
           ))}
@@ -226,9 +226,9 @@ function ReviewHero({ review }: { review: DealReviewUi }) {
       </details>
 
       <div className="mt-3 flex items-center gap-2">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/10">
           <div
-            className="h-1.5 rounded-full bg-white/85"
+            className="h-1.5 rounded-full bg-[var(--ink)]"
             style={{ width: `${Math.min(100, review.confidence)}%` }}
           />
         </div>
@@ -351,7 +351,7 @@ function DealCard({
             )}
           </div>
           {price != null ? (
-            <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-white">
+            <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-[var(--ink)]">
               {formatUsd(price)}
             </p>
           ) : (
@@ -398,14 +398,14 @@ function DealCard({
             >
               <span className="text-[var(--glass-text-secondary)]">{li.label}</span>
               <span className="flex items-center gap-2">
-                <span className="tabular-nums font-medium text-white">
+                <span className="tabular-nums font-medium text-[var(--ink)]">
                   {formatUsd(li.amount)}
                 </span>
                 {li.evidence_ts != null && (
                   <button
                     type="button"
                     onClick={() => onListen(s.vendor_id, li.evidence_ts!)}
-                    className="text-[11px] font-medium text-white underline-offset-2 hover:underline"
+                    className="text-[11px] font-medium text-[var(--ink)] underline-offset-2 hover:underline"
                   >
                     Listen
                   </button>

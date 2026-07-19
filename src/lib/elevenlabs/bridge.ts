@@ -9,7 +9,7 @@
  * 1. Open two WebSocket conversations (negotiator + counter).
  * 2. Send conversation_initiation_client_data with job/session dynamic vars.
  * 3. Kick off negotiator with a synthetic user_message describing the job.
- * 4. On each agent_response_event, forward that text as user_message to the peer.
+ * 4. On each FINAL agent_response (not streaming parts), forward to peer.
  * 5. Persist transcripts + tool side-effects via existing webhook tools.
  */
 import WebSocket from "ws";
@@ -17,12 +17,18 @@ import type { BridgePairIntent } from "./types";
 import { getElevenLabsApiKey } from "./env";
 import { getStore } from "@/lib/db";
 import { publish } from "@/lib/db/events";
+import { logQuote } from "@/lib/tools/logQuote";
+import { closeSession } from "@/lib/tools/closeSession";
 
 const WATCHDOG_MS = 90_000;
 const MAX_SESSION_MS = 4 * 60_000;
 const WS_URL = "wss://api.elevenlabs.io/v1/convai/conversation";
-/** Avoid infinite ping-pong loops */
-const MAX_TURNS = 24;
+/** Hard cap on agent↔agent turns (each final agent speech counts). */
+const MAX_TURNS = 18;
+/** Wait for silence / no superseding text before forwarding a turn. */
+const FINAL_DEBOUNCE_MS = 750;
+/** Longer wait when text looks truncated mid-phrase. */
+const INCOMPLETE_DEBOUNCE_MS = 1400;
 
 export type BridgeResult = {
   sessionId: string;
@@ -34,6 +40,12 @@ export type BridgeResult = {
 };
 
 type JsonMsg = Record<string, unknown>;
+
+type PendingTurn = {
+  text: string;
+  timer: ReturnType<typeof setTimeout>;
+  fromRole: "negotiator" | "counter";
+};
 
 function asObj(data: WebSocket.RawData): JsonMsg | null {
   try {
@@ -103,33 +115,48 @@ function sendInit(
 function sendUserMessage(ws: WebSocket, text: string) {
   const trimmed = text.trim();
   if (!trimmed) return;
-  // Official client→server event
   sendJson(ws, { type: "user_message", text: trimmed });
 }
 
-function extractAgentText(msg: JsonMsg): string | null {
-  // Common shapes from ElevenLabs ConvAI WS
-  const agentEvt = msg.agent_response_event as JsonMsg | undefined;
-  if (agentEvt?.agent_response) return String(agentEvt.agent_response);
+/**
+ * Extract only FINAL complete agent turns.
+ * Ignores streaming parts (agent_chat_response_part) and non-final types.
+ */
+function extractFinalAgentText(msg: JsonMsg): string | null {
+  const t = String(msg.type || "");
 
-  if (msg.type === "agent_response" && typeof msg.agent_response === "string") {
-    return msg.agent_response;
-  }
-  if (msg.type === "agent_response" && typeof msg.text === "string") {
-    return msg.text;
-  }
-
-  // Some versions nest under data
-  const data = msg.data as JsonMsg | undefined;
-  if (data?.agent_response) return String(data.agent_response);
-
-  // Final agent response event
+  // Streaming / partial text-only chunks — never forward these mid-turn
   if (
-    msg.type === "agent_response_event" ||
-    String(msg.type || "").includes("agent_response")
+    t === "agent_chat_response_part" ||
+    t.includes("chat_response_part") ||
+    t.includes("partial") ||
+    t.includes("tentative")
   ) {
-    if (typeof msg.agent_response === "string") return msg.agent_response;
-    if (typeof msg.text === "string") return msg.text;
+    return null;
+  }
+
+  // Canonical final event
+  if (t === "agent_response") {
+    const evt = msg.agent_response_event as JsonMsg | undefined;
+    if (evt?.agent_response) return String(evt.agent_response).trim();
+    if (typeof msg.agent_response === "string") return msg.agent_response.trim();
+    if (typeof msg.text === "string") return msg.text.trim();
+  }
+
+  // Nested agent_response_event without type (some API versions)
+  if (msg.agent_response_event && !t.includes("correction")) {
+    const evt = msg.agent_response_event as JsonMsg;
+    if (typeof evt.agent_response === "string") {
+      return evt.agent_response.trim();
+    }
+  }
+
+  // Correction after barge-in: use corrected text as the final spoken turn
+  if (t === "agent_response_correction") {
+    const evt = msg.agent_response_correction_event as JsonMsg | undefined;
+    if (evt?.corrected_agent_response) {
+      return String(evt.corrected_agent_response).trim();
+    }
   }
 
   return null;
@@ -143,6 +170,18 @@ function extractConversationId(msg: JsonMsg): string | null {
   return null;
 }
 
+/** Heuristic: text looks like a truncated partial ("Hello, I am an…"). */
+function looksIncomplete(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 12) return true;
+  if (/[…]\s*$/.test(t) || /\.\.\.\s*$/.test(t)) return true;
+  // Ends mid-article / mid-phrase without terminal punctuation
+  if (/\b(a|an|the|I am|I'm|we can|looking at|about)\s*$/i.test(t)) return true;
+  // No sentence end and very short
+  if (t.length < 40 && !/[.!?]\s*$/.test(t)) return true;
+  return false;
+}
+
 function buildKickoff(intent: BridgePairIntent): string {
   let job: Record<string, unknown> = {};
   try {
@@ -151,16 +190,50 @@ function buildKickoff(intent: BridgePairIntent): string {
     /* ignore */
   }
   const parts = [
-    "You are on a live negotiation with a vendor. Start now.",
+    "Live negotiation start. You are the homeowner's AI buying agent.",
     `Company key: ${intent.companyKey}.`,
-    "Introduce yourself as an AI assistant negotiating for a homeowner, describe the job once, and ask for an itemized installed quote.",
+    "Open once: brief AI disclosure, state the job from JSON, ask for an itemized installed total.",
+    "NEVER speak tool names. Invoke tools silently. After a firm total: log_quote then close_session. After callback-only: close_session as callback_commitment. Keep turns short.",
     `Job JSON: ${JSON.stringify(job)}`,
-    "Use tools when you have numbers. Close with a structured outcome when done.",
   ];
   if (intent.playbookHint) {
-    parts.push(`Playbook (learned tactics to prefer): ${intent.playbookHint}`);
+    parts.push(`Playbook (prefer these tactics; never invent $): ${intent.playbookHint}`);
   }
   return parts.join(" ");
+}
+
+/** Pull dollar amounts from spoken text for best-effort outcomes. */
+export function parsePricesFromText(text: string): number[] {
+  const out: number[] = [];
+  const re =
+    /\$\s*([\d,]+(?:\.\d{1,2})?)|([\d,]+(?:\.\d{1,2})?)\s*(?:dollars?)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const raw = (m[1] || m[2] || "").replace(/,/g, "");
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 50 && n <= 500_000) out.push(Math.round(n));
+  }
+  return out;
+}
+
+function detectCallbackLanguage(text: string): string | null {
+  if (
+    /call( you)? back|callback|on-?site|site visit|won't quote|do not quote|don't quote|can't (give|put) a (price|number)|no phone (price|quote)/i.test(
+      text
+    )
+  ) {
+    const windowMatch = text.match(
+      /(?:between|tomorrow|weekday|morning|afternoon|next)\s[^.]{0,60}/i
+    );
+    return windowMatch?.[0]?.trim() || "callback / site visit offered";
+  }
+  return null;
+}
+
+function detectFirmCloseSignal(text: string): boolean {
+  return /final (price|number|total)|that's (our |the )?best|locked (in )?at|written (quote|number)|itemized total|all-?in (at|for)/i.test(
+    text
+  );
 }
 
 export async function runAgentBridge(
@@ -168,18 +241,26 @@ export async function runAgentBridge(
 ): Promise<BridgeResult> {
   const apiKey = getElevenLabsApiKey();
   const store = getStore();
+  const sessionStartMs = Date.now();
   let lastEvent = Date.now();
   let closed = false;
   let turns = 0;
+  let closingInProgress = false;
+  /** Single shared close chain — serverless must await this before return */
+  let closePromise: Promise<void> | null = null;
 
   let negWs: WebSocket | null = null;
   let ctrWs: WebSocket | null = null;
   let negCid: string | null = null;
   let ctrCid: string | null = null;
 
-  // Deduplicate forwarded agent texts
   const seenNeg = new Set<string>();
   const seenCtr = new Set<string>();
+  const pendingByRole: Partial<
+    Record<"negotiator" | "counter", PendingTurn>
+  > = {};
+
+  const spoken: { speaker: string; text: string }[] = [];
 
   const touch = () => {
     lastEvent = Date.now();
@@ -188,8 +269,11 @@ export async function runAgentBridge(
     });
   };
 
+  const relTs = () => Math.max(0, Date.now() - sessionStartMs);
+
   const append = async (speaker: string, text: string) => {
-    const ts_ms = Date.now() % 1_000_000_000;
+    const ts_ms = relTs();
+    spoken.push({ speaker, text });
     await store.appendTranscript({
       session_id: intent.sessionId,
       ts_ms,
@@ -204,29 +288,248 @@ export async function runAgentBridge(
     });
   };
 
-  const forceClose = async (reason: string) => {
+  const clearPending = (role: "negotiator" | "counter") => {
+    const p = pendingByRole[role];
+    if (p) {
+      clearTimeout(p.timer);
+      delete pendingByRole[role];
+    }
+  };
+
+  const forceClose = (reason: string): Promise<void> => {
+    // Single closePromise chain — concurrent callers share one write
+    if (closePromise) return closePromise;
+    closingInProgress = true;
+    closePromise = (async () => {
+      clearPending("negotiator");
+      clearPending("counter");
+
+      try {
+        const session = await store.getSession(intent.sessionId);
+        if (session && !session.outcome_type) {
+          const allText = spoken.map((s) => s.text).join(" ");
+          const vendorText = spoken
+            .filter((s) => s.speaker === "vendor")
+            .map((s) => s.text)
+            .join(" ");
+          const quotes = await store.listQuotesByJob(intent.jobId);
+          const sessionQuotes = quotes
+            .filter((q) => q.session_id === intent.sessionId)
+            .sort((a, b) => a.created_at.localeCompare(b.created_at));
+          const quoteTotals = sessionQuotes
+            .map((q) => q.total)
+            .filter((n): n is number => typeof n === "number" && n > 0);
+          const vendorPrices = parsePricesFromText(vendorText);
+          const anyPrices = parsePricesFromText(allText);
+          const firmSignal =
+            detectFirmCloseSignal(allText) ||
+            detectFirmCloseSignal(vendorText);
+          const hasLoggedQuotes = sessionQuotes.length > 0;
+
+          // Only treat as itemized quote when we already logged quotes OR
+          // firm close language + a clear grand total (never invent from random $)
+          let grandTotal: number | null = null;
+          if (hasLoggedQuotes) {
+            grandTotal = quoteTotals[quoteTotals.length - 1] ?? null;
+          } else if (firmSignal) {
+            // Prefer last largest vendor total with firm language
+            const prices =
+              vendorPrices.length > 0 ? vendorPrices : anyPrices;
+            if (prices.length > 0) {
+              const last = prices[prices.length - 1]!;
+              const largest = Math.max(...prices);
+              grandTotal =
+                last >= largest * 0.85 ? last : largest;
+            }
+          }
+
+          const callback = detectCallbackLanguage(vendorText || allText);
+          const canItemize =
+            intent.companyKey !== "stonewaller" &&
+            grandTotal != null &&
+            (hasLoggedQuotes || firmSignal);
+
+          if (canItemize && grandTotal != null) {
+            if (!hasLoggedQuotes) {
+              try {
+                await logQuote({
+                  job_id: intent.jobId,
+                  session_id: intent.sessionId,
+                  company_key: intent.companyKey,
+                  company_name: session.vendor_name,
+                  currency: "USD",
+                  line_items: [
+                    {
+                      label: "Phone total (firm close)",
+                      amount: grandTotal,
+                    },
+                  ],
+                  grand_total: grandTotal,
+                  notes: `auto from firm total on ${reason}`,
+                });
+              } catch (e) {
+                console.warn("[bridge] best-effort log_quote", e);
+              }
+            }
+            const res = await closeSession({
+              session_id: intent.sessionId,
+              job_id: intent.jobId,
+              outcome_type: "itemized_quote",
+              summary: reason,
+            });
+            if (!res.ok) {
+              await store.closeSession(
+                intent.sessionId,
+                "documented_decline",
+                `${reason}; close failed: ${res.error}`
+              );
+            }
+          } else if (callback || intent.companyKey === "stonewaller") {
+            const res = await closeSession({
+              session_id: intent.sessionId,
+              job_id: intent.jobId,
+              outcome_type: callback
+                ? "callback_commitment"
+                : "documented_decline",
+              callback_window: callback || reason,
+              summary: reason,
+            });
+            if (!res.ok) {
+              await store.closeSession(
+                intent.sessionId,
+                "documented_decline",
+                reason
+              );
+            }
+          } else {
+            // No firm total → never invent itemized_quote from stray $
+            await store.closeSession(
+              intent.sessionId,
+              callback ? "callback_commitment" : "documented_decline",
+              reason
+            );
+          }
+
+          publish({
+            type: "session",
+            job_id: intent.jobId,
+            session_id: intent.sessionId,
+            payload: { outcome: "forced_close", reason },
+          });
+        }
+      } finally {
+        closed = true;
+        try {
+          negWs?.close();
+          ctrWs?.close();
+        } catch {
+          /* ignore */
+        }
+      }
+    })();
+    return closePromise;
+  };
+
+  const maybeAutoCloseFromSpeech = (fromRole: "negotiator" | "counter", text: string) => {
+    // After firm total or callback, prefer structured close soon
+    if (fromRole === "counter") {
+      const cb = detectCallbackLanguage(text);
+      if (cb && intent.companyKey === "stonewaller" && turns >= 4) {
+        void forceClose(`stonewaller callback: ${cb}`);
+        return;
+      }
+    }
+    if (
+      fromRole === "negotiator" &&
+      /thank you|we'll take it|logged|closing|goodbye|have a (great|good) day/i.test(
+        text
+      ) &&
+      turns >= 6
+    ) {
+      // Negotiator signaled wrap-up; give tools a beat then force if still open
+      setTimeout(() => {
+        void forceClose("negotiator signaled close");
+      }, 2500);
+    }
+  };
+
+  const commitFinalTurn = (
+    fromRole: "negotiator" | "counter",
+    text: string,
+    to: WebSocket,
+    seen: Set<string>
+  ) => {
     if (closed) return;
-    closed = true;
-    const session = await store.getSession(intent.sessionId);
-    if (session && !session.outcome_type) {
-      await store.closeSession(
-        intent.sessionId,
-        "documented_decline",
-        reason
-      );
-      publish({
-        type: "session",
-        job_id: intent.jobId,
-        session_id: intent.sessionId,
-        payload: { outcome: "documented_decline", reason },
-      });
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    // Prefer longest unique key to collapse "Hello" → "Hello, I am..." supersedes
+    const key = trimmed.slice(0, 240);
+    // Drop if exact or near-duplicate already forwarded
+    for (const s of seen) {
+      if (s === key) return;
+      if (key.startsWith(s.slice(0, 40)) && key.length > s.length) {
+        // longer extension of prior short — allow (remove short key)
+        seen.delete(s);
+      } else if (s.startsWith(key.slice(0, 40)) && s.length >= key.length) {
+        return; // already have equal/longer
+      }
     }
-    try {
-      negWs?.close();
-      ctrWs?.close();
-    } catch {
-      /* ignore */
+    seen.add(key);
+
+    turns += 1;
+    const speaker = fromRole === "negotiator" ? "negotiator" : "vendor";
+    void append(speaker, trimmed);
+    maybeAutoCloseFromSpeech(fromRole, trimmed);
+
+    if (turns >= MAX_TURNS) {
+      void forceClose("max turns reached");
+      return;
     }
+
+    if (to.readyState === WebSocket.OPEN && !closed) {
+      sendUserMessage(to, trimmed);
+    }
+  };
+
+  /**
+   * Debounce: only forward FINAL complete turns.
+   * If a longer superseding text arrives before the timer, replace buffer.
+   */
+  const scheduleFinalTurn = (
+    fromRole: "negotiator" | "counter",
+    text: string,
+    to: WebSocket,
+    seen: Set<string>
+  ) => {
+    if (closed) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const existing = pendingByRole[fromRole];
+    if (existing) {
+      // Supersede if new text extends prior partial, or is clearly longer final
+      const prev = existing.text;
+      if (
+        trimmed === prev ||
+        (prev.startsWith(trimmed) && prev.length > trimmed.length)
+      ) {
+        // shorter or same — keep longer pending
+        return;
+      }
+      clearTimeout(existing.timer);
+    }
+
+    const wait = looksIncomplete(trimmed)
+      ? INCOMPLETE_DEBOUNCE_MS
+      : FINAL_DEBOUNCE_MS;
+
+    const timer = setTimeout(() => {
+      delete pendingByRole[fromRole];
+      commitFinalTurn(fromRole, trimmed, to, seen);
+    }, wait);
+
+    pendingByRole[fromRole] = { text: trimmed, timer, fromRole };
   };
 
   const watchdog = setInterval(() => {
@@ -267,7 +570,6 @@ export async function runAgentBridge(
           else ctrCid = cid;
         }
 
-        // Pings
         if (msg.type === "ping" && msg.ping_event) {
           const eventId = (msg.ping_event as JsonMsg).event_id;
           sendJson(from, {
@@ -277,30 +579,10 @@ export async function runAgentBridge(
           return;
         }
 
-        // Skip user_transcription_event entirely: kickoff is a synthetic
-        // user_message, and cross-wired peer text also arrives as user_message.
-        // Logging those would leak the kickoff brief and double every turn.
-
-        const agentText = extractAgentText(msg);
+        const agentText = extractFinalAgentText(msg);
         if (!agentText) return;
 
-        const key = agentText.slice(0, 200);
-        if (seen.has(key)) return;
-        seen.add(key);
-
-        turns += 1;
-        const speaker = fromRole === "negotiator" ? "negotiator" : "vendor";
-        void append(speaker, agentText);
-
-        if (turns >= MAX_TURNS) {
-          void forceClose("max turns reached");
-          return;
-        }
-
-        // Cross-wire: agent speech → peer as user_message
-        if (to.readyState === WebSocket.OPEN && !closed) {
-          sendUserMessage(to, agentText);
-        }
+        scheduleFinalTurn(fromRole, agentText, to, seen);
       });
 
       from.on("error", (err) => {
@@ -308,7 +590,6 @@ export async function runAgentBridge(
       });
     };
 
-    // Register listeners BEFORE init/kickoff so first agent_response is not dropped
     handleSide(negWs, ctrWs, "negotiator", seenNeg);
     handleSide(ctrWs, negWs, "counter", seenCtr);
 
@@ -326,32 +607,34 @@ export async function runAgentBridge(
       payload: { status: "live" },
     });
 
-    // Small delay so initiation is processed
     await new Promise((r) => setTimeout(r, 400));
 
-    // Kickoff: synthetic homeowner brief so the negotiator opens the call.
-    // (Not shown as a chat bubble — it's internal orchestration, not spoken.)
     const kickoff = buildKickoff(intent);
     sendUserMessage(negWs, kickoff);
     touch();
 
     await new Promise<void>((resolve) => {
-      const done = () => {
-        if (closed) {
-          resolve();
-          return;
-        }
-        closed = true;
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
         clearInterval(watchdog);
         resolve();
       };
-      negWs!.on("close", done);
-      ctrWs!.on("close", done);
+      const onPeerClose = () => {
+        void forceClose("peer socket closed").finally(finish);
+      };
+      negWs!.on("close", onPeerClose);
+      ctrWs!.on("close", onPeerClose);
       setTimeout(() => {
-        void forceClose("session wall clock");
-        done();
+        void forceClose("session wall clock").finally(finish);
       }, MAX_SESSION_MS);
     });
+
+    // Always await the close chain so serverless does not drop outcomes
+    if (closePromise) {
+      await closePromise;
+    }
 
     await store.updateSession(intent.sessionId, {
       negotiator_conversation_id: negCid,
@@ -359,14 +642,11 @@ export async function runAgentBridge(
       last_event_at: new Date().toISOString(),
     });
 
-    // If still open without outcome, close politely
     const final = await store.getSession(intent.sessionId);
     if (final && !final.outcome_type) {
-      await store.closeSession(
-        intent.sessionId,
-        "documented_decline",
-        "bridge ended without structured close_session"
-      );
+      await forceClose("bridge ended without structured close_session");
+    } else if (closePromise) {
+      await closePromise;
     }
 
     return {
@@ -383,6 +663,12 @@ export async function runAgentBridge(
       status: "error",
       recording_note: error,
     });
+    // Still try best-effort close so deal review can run
+    try {
+      await forceClose(`bridge_error: ${error}`);
+    } catch {
+      /* ignore */
+    }
     publish({
       type: "session",
       job_id: intent.jobId,
@@ -398,6 +684,16 @@ export async function runAgentBridge(
     };
   } finally {
     clearInterval(watchdog);
+    clearPending("negotiator");
+    clearPending("counter");
+    // Drain any in-flight close before sockets/process go away
+    if (closePromise) {
+      try {
+        await closePromise;
+      } catch {
+        /* ignore */
+      }
+    }
     try {
       negWs?.close();
       ctrWs?.close();

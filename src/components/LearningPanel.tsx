@@ -12,7 +12,7 @@ type Props = {
   vertical: string;
 };
 
-/** Playbook leaderboard — Phase 3 learning surface */
+/** Playbook leaderboard — show after deal on product surface */
 export function LearningPanel({ vertical }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
   const [sentences, setSentences] = useState<string[]>([]);
@@ -24,7 +24,7 @@ export function LearningPanel({ vertical }: Props) {
       try {
         const res = await fetch(
           `/api/learning?vertical=${encodeURIComponent(vertical)}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
         if (!res.ok) return;
         const data = (await res.json()) as {
@@ -48,10 +48,10 @@ export function LearningPanel({ vertical }: Props) {
   if (!rows.length && !sentences.length) return null;
 
   return (
-    <div className="glass-inner p-3">
+    <div className="glass-inner p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <p className="label-section !text-[var(--glass-text-muted)]">Learning</p>
-        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-[var(--glass-text-muted)]">
+        <p className="label-section">Learning</p>
+        <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-medium text-[var(--ink-muted)]">
           playbook v{version || 1}
         </span>
       </div>
@@ -59,19 +59,19 @@ export function LearningPanel({ vertical }: Props) {
         {rows.slice(0, 5).map((r) => (
           <li
             key={r.tactic}
-            className="flex items-center justify-between gap-2 text-xs text-[var(--glass-text-secondary)]"
+            className="flex items-center justify-between gap-2 text-xs text-[var(--ink-secondary)]"
           >
-            <span className="font-medium text-[var(--glass-text)]">
+            <span className="font-medium text-[var(--ink)]">
               {r.tactic.replace(/_/g, " ")}
             </span>
-            <span className="tabular-nums text-[var(--glass-text-muted)]">
+            <span className="tabular-nums text-[var(--ink-muted)]">
               {r.outcome_delta.toFixed(0)}% · n={r.sample_count}
             </span>
           </li>
         ))}
       </ul>
       {sentences[0] && (
-        <p className="mt-2 text-[11px] leading-snug text-[var(--glass-text-muted)]">
+        <p className="mt-2 text-[11px] leading-snug text-[var(--ink-muted)]">
           {sentences[0]}
         </p>
       )}

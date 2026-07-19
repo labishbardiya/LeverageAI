@@ -116,15 +116,26 @@ async function cacheSet(details: PlaceDetails): Promise<void> {
   if (hasDatabaseUrl()) {
     try {
       const pool = getPool();
+      // migrate.sql shape: place_id PK + payload + fetched_at
       await pool.query(
         `INSERT INTO providers (place_id, vertical, payload, fetched_at)
          VALUES ($1, $2, $3::jsonb, now())
          ON CONFLICT (place_id) DO UPDATE
          SET payload = EXCLUDED.payload, fetched_at = now()`,
-        [details.place_id, null, JSON.stringify(details)]
+        [details.place_id, "hvac", JSON.stringify(details)]
       );
     } catch {
-      /* providers table optional */
+      /* providers table optional / alternate schema — file cache below */
+      try {
+        const dir = join(process.cwd(), "data", "providers-cache");
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        writeFileSync(
+          join(dir, `${details.place_id}.json`),
+          JSON.stringify(details, null, 2)
+        );
+      } catch {
+        /* ignore */
+      }
     }
     return;
   }

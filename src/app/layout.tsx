@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Leverage.AI",
+  title: "Leverage.AI — parallel deal negotiation",
   description:
-    "Tell us what you need. We negotiate with several providers at once and recommend the best deal.",
+    "Describe the job once. We match shops, negotiate with three providers in parallel, and hand you one clear recommendation.",
 };
 
 export default function RootLayout({

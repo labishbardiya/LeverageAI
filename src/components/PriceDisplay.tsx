@@ -16,7 +16,8 @@ function formatUsd(n: number): string {
 }
 
 /**
- * Huge price with flash: red on any change, then green when price drops.
+ * Huge price with flash: accent on any change, green when price drops.
+ * Uses dark ink for light glass backgrounds (/live).
  */
 export function PriceDisplay({ price, className = "" }: Props) {
   const prev = useRef<number | null>(null);
@@ -40,7 +41,7 @@ export function PriceDisplay({ price, className = "" }: Props) {
   if (price == null) {
     return (
       <div
-        className={`font-semibold tabular-nums text-5xl leading-none text-white/35 ${className}`}
+        className={`font-semibold tabular-nums text-5xl leading-none text-[var(--ink-muted)] ${className}`}
       >
         —
       </div>
@@ -49,10 +50,10 @@ export function PriceDisplay({ price, className = "" }: Props) {
 
   const color =
     flash === "down"
-      ? "text-[#6ee7b7] price-flash-down"
+      ? "text-[var(--success)] price-flash-down"
       : flash === "up"
-        ? "text-[#fda4af] price-flash-up"
-        : "text-white";
+        ? "text-[var(--danger)] price-flash-up"
+        : "text-[var(--ink)]";
 
   return (
     <div

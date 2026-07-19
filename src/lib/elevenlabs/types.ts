@@ -21,6 +21,9 @@ export interface ConversationDynamicVariables {
   /** JSON-stringified confirmed job_spec for the negotiator. */
   job_spec_json?: string;
   vertical?: string;
+  /** UCB1 playbook sentences (tactic hints only — no invented $). */
+  playbook?: string;
+  bridge_role?: string;
   [key: string]: string | undefined;
 }
 

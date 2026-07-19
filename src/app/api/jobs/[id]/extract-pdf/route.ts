@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * POST /api/jobs/[id]/extract-pdf
- * Dual path: xAI vision when XAI_API_KEY set; else heuristics on sample/text.
+ * Heuristic extraction from PDF/text/image bytes (no paid vision required).
  * Output always validated against the same JobSpec shape.
  */
 export async function POST(req: NextRequest, ctx: Ctx) {

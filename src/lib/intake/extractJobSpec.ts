@@ -1,7 +1,7 @@
 /**
  * Document / image / free-text → JobSpec.
- * 1) Optional vision LLM if XAI_API_KEY
- * 2) Strong multi-vertical heuristics (always works for judges)
+ * Heuristics are primary (always works offline for judges).
+ * Optional vision LLMs are NOT required and not used on product path.
  */
 import { z } from "zod";
 import { loadVertical } from "@/lib/config/loadVertical";
@@ -107,7 +107,6 @@ function heuristicFromText(text: string, verticalId: string): ExtractedJobSpec {
     }
   }
 
-  // Free-text notes always preserved for the negotiator
   const cleaned = raw.replace(/\s+/g, " ").trim().slice(0, 800);
   if (cleaned) {
     base.notes = base.notes
@@ -121,94 +120,25 @@ function heuristicFromText(text: string, verticalId: string): ExtractedJobSpec {
   return JobSpecZod.parse(base);
 }
 
-async function extractWithXai(
-  imageBase64: string,
-  mime: string,
-  verticalId: string
-): Promise<ExtractedJobSpec> {
-  const v = loadVertical(verticalId);
-  const schemaHint = JSON.stringify(v.job_spec_schema.fields, null, 2);
-  const body = {
-    model: "grok-4",
-    messages: [
-      {
-        role: "system",
-        content: `Extract a homeowner job specification JSON for vertical "${verticalId}". Schema fields:\n${schemaHint}\nReturn ONLY valid JSON matching those fields. Include job_type/job_kind when clear.`,
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:${mime};base64,${imageBase64}`,
-            },
-          },
-          {
-            type: "text",
-            text: "Extract the job_spec JSON from this quote / document image.",
-          },
-        ],
-      },
-    ],
-    temperature: 0,
-  };
-
-  const res = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.XAI_API_KEY}`,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    throw new Error(`xAI extract failed: ${res.status}`);
-  }
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = data.choices?.[0]?.message?.content ?? "{}";
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch?.[0] || content);
-  return JobSpecZod.parse(parsed);
-}
-
+/**
+ * Primary path: multi-vertical heuristics on free text / decoded upload bytes.
+ * No xAI/Grok dependency — always functional offline for judges.
+ */
 export async function extractJobSpecFromUpload(input: {
   vertical: string;
   text?: string;
   fileBase64?: string;
   mime?: string;
   filename?: string;
-}): Promise<{ job_spec: ExtractedJobSpec; path: "xai" | "heuristic" }> {
+}): Promise<{ job_spec: ExtractedJobSpec; path: "heuristic" }> {
   const vertical = input.vertical || "hvac";
 
-  if (process.env.XAI_API_KEY && input.fileBase64) {
-    try {
-      let spec = await extractWithXai(
-        input.fileBase64,
-        input.mime || "image/png",
-        vertical
-      );
-      const check = JobSpecZod.safeParse(spec);
-      if (!check.success) {
-        spec = await extractWithXai(
-          input.fileBase64,
-          input.mime || "image/png",
-          vertical
-        );
-      }
-      return { job_spec: JobSpecZod.parse(spec), path: "xai" };
-    } catch (e) {
-      console.warn("[extractJobSpec] vision failed, falling back", e);
-    }
-  }
-
-  // Decode PDF/binary latin1 text when present; always functional without paid keys
   let text = input.text || "";
   if (!text && input.fileBase64) {
     try {
-      text = Buffer.from(input.fileBase64, "base64").toString("latin1").slice(0, 12000);
+      text = Buffer.from(input.fileBase64, "base64")
+        .toString("latin1")
+        .slice(0, 12000);
     } catch {
       /* ignore */
     }

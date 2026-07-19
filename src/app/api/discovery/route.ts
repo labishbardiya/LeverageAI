@@ -120,8 +120,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Always-available offline path (judges / no Places key / API failure)
     if (detailsList.length === 0) {
       detailsList = loadSnapshot(vertical, zip);
+      source = "offline snapshot (data/discovery)";
     }
 
     const ranked = detailsList
