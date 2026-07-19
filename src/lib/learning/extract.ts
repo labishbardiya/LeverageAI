@@ -87,28 +87,9 @@ export async function upsertLearning(
   );
 }
 
-function pricesFromTranscripts(
-  transcripts: { speaker: string; text: string; ts_ms: number }[]
-): number[] {
-  const re =
-    /\$\s*([\d,]+(?:\.\d{1,2})?)|([\d,]+(?:\.\d{1,2})?)\s*(?:dollars?)/gi;
-  const out: number[] = [];
-  const sorted = [...transcripts].sort((a, b) => a.ts_ms - b.ts_ms);
-  for (const line of sorted) {
-    if (line.speaker !== "vendor" && line.speaker !== "agent") continue;
-    let m: RegExpExecArray | null;
-    re.lastIndex = 0;
-    while ((m = re.exec(line.text)) !== null) {
-      const raw = (m[1] || m[2] || "").replace(/,/g, "");
-      const n = Number(raw);
-      if (Number.isFinite(n) && n >= 50 && n <= 500_000) out.push(Math.round(n));
-    }
-  }
-  return out;
-}
-
 /**
- * Analyze session transcripts + price series; attribute drops to preceding tactics.
+ * Analyze persisted quote history only. Transcript prices are intentionally
+ * excluded: spoken numbers are evidence, not verified commercial outcomes.
  */
 export async function extractLearningsFromSession(input: {
   vertical: string;
@@ -116,10 +97,7 @@ export async function extractLearningsFromSession(input: {
   priceHistory: number[];
 }): Promise<{ tactic: Tactic; delta: number }[]> {
   const events: { tactic: Tactic; delta: number }[] = [];
-  let series = input.priceHistory.filter((n) => typeof n === "number" && n > 0);
-  if (series.length < 2) {
-    series = pricesFromTranscripts(input.transcripts);
-  }
+  const series = input.priceHistory.filter((n) => typeof n === "number" && n > 0);
 
   const observed = new Map<Tactic, number>();
   for (const line of input.transcripts

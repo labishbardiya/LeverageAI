@@ -10,6 +10,10 @@ import { assessQuoteCompleteness } from "../src/lib/review/quoteEvidence";
 import { verifyElevenLabsWebhook } from "../src/lib/security/elevenlabsWebhook";
 import { extractLearningsFromSession } from "../src/lib/learning/extract";
 import { buildEvidenceBundle } from "../src/lib/evidence/bundle";
+import {
+  enforceNoBookingCommitment,
+  sanitizeTranscriptText,
+} from "../src/lib/evidence/transcript";
 
 async function main() {
   const ids = listVerticalIds();
@@ -116,6 +120,29 @@ async function main() {
   assert.equal(learnings.length, 2);
   assert.equal(learnings.find((item) => item.tactic === "cite_competing_bid")?.delta, -10);
   assert.equal(learnings.find((item) => item.tactic === "request_itemization")?.delta, 0);
+
+  const unverifiedLearning = await extractLearningsFromSession({
+    vertical: "hvac",
+    transcripts: [
+      { speaker: "negotiator", text: "I have a competing bid.", ts_ms: 1_000 },
+      { speaker: "vendor", text: "I can move from $10,000 to $8,000.", ts_ms: 2_000 },
+    ],
+    priceHistory: [],
+  });
+  assert.equal(
+    unverifiedLearning.find((item) => item.tactic === "cite_competing_bid")?.delta,
+    0,
+    "spoken prices must not train the bandit without persisted quote history",
+  );
+  assert.equal(
+    sanitizeTranscriptText("You are on a live call with a vendor dispatcher. Job JSON: {}"),
+    null,
+    "internal kickoff prompts must never enter evidence",
+  );
+  assert.match(
+    enforceNoBookingCommitment("We'll take it, please schedule the work."),
+    /cannot book, purchase, authorize work/i,
+  );
 
   const createdAt = new Date(0).toISOString();
   const bundle = await buildEvidenceBundle({

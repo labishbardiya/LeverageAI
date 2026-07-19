@@ -120,6 +120,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (parsed.data.live === true && !liveAvailable) {
+      return NextResponse.json(
+        {
+          error: "Live mode was explicitly requested, but the ElevenLabs agents are not fully configured. No simulation was started.",
+          code: "LIVE_MODE_UNAVAILABLE",
+        },
+        { status: 503 },
+      );
+    }
+
     if (liveRequested && !liveAvailable) {
       // Fall through to simulate with a clear flag
       wantLive = false;
@@ -222,6 +232,21 @@ export async function POST(req: NextRequest) {
     }
 
     await store.updateJob(job.id, { status: "running" });
+    await Promise.all(
+      sessions.map((session) =>
+        recordToolCall({
+          session_id: session.id,
+          job_id: job.id,
+          tool_name: "execution_provenance",
+          payload: {
+            requested_mode: parsed.data.live === true ? "live" : forceSimulate ? "simulation" : "automatic",
+            actual_mode: wantLive ? "live" : "simulation",
+            transport: wantLive ? "elevenlabs_duplex_audio_with_text_fallback" : "deterministic_server_simulation",
+            fallback_used: false,
+          },
+        }),
+      ),
+    );
     try {
       onSessionsStarted(job.id, sessions.length);
     } catch (e) {
@@ -289,6 +314,18 @@ export async function POST(req: NextRequest) {
           );
 
           for (const r of results) {
+            await recordToolCall({
+              session_id: r.sessionId,
+              job_id: jobId,
+              tool_name: "live_execution_result",
+              payload: {
+                ok: r.ok,
+                negotiator_conversation_id: r.negotiatorConversationId,
+                counter_conversation_id: r.counterConversationId,
+                turns: r.turns ?? 0,
+                error: r.error ?? null,
+              },
+            });
             if (!r.ok) {
               publish({
                 type: "session",
@@ -316,12 +353,17 @@ export async function POST(req: NextRequest) {
           const store2 = getStore();
           for (const s of await store2.listSessionsByJob(jobId)) {
             if (s.negotiator_conversation_id) {
-              await fetchAndStoreRecording(
-                s.id,
-                s.negotiator_conversation_id
-              ).catch((e) =>
-                console.warn("[sessions/start] recording", s.id, e)
-              );
+              for (let attempt = 1; attempt <= 3; attempt += 1) {
+                const recording = await fetchAndStoreRecording(
+                  s.id,
+                  s.negotiator_conversation_id,
+                ).catch((e) => {
+                  console.warn("[sessions/start] recording", s.id, e);
+                  return { audio_url: null, meta: null };
+                });
+                if (recording.audio_url) break;
+                if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+              }
             }
           }
 

@@ -1,5 +1,6 @@
 /**
- * Agent-to-agent bridge using TEXT mediation (not raw audio relay).
+ * Agent-to-agent bridge using duplex ElevenLabs audio when audio events are
+ * available, with final-text mediation only as a compatibility fallback.
  *
  * ElevenLabs audio-chunk relay is fragile server-side. Official client events
  * support `user_message` text input that triggers the same response flow as
@@ -18,6 +19,10 @@ import { getElevenLabsApiKey } from "./env";
 import { getStore } from "@/lib/db";
 import { publish } from "@/lib/db/events";
 import { closeSession } from "@/lib/tools/closeSession";
+import {
+  enforceNoBookingCommitment,
+  sanitizeTranscriptText,
+} from "@/lib/evidence/transcript";
 
 const WATCHDOG_MS = 90_000;
 const MAX_SESSION_MS = 4 * 60_000;
@@ -131,6 +136,17 @@ function sendUserMessage(ws: WebSocket, text: string) {
   sendJson(ws, { type: "user_message", text: trimmed });
 }
 
+function extractAudioChunk(msg: JsonMsg): string | null {
+  if (String(msg.type || "") !== "audio") return null;
+  const event = msg.audio_event as JsonMsg | undefined;
+  const encoded = event?.audio_base_64 ?? msg.audio_base_64;
+  return typeof encoded === "string" && encoded ? encoded : null;
+}
+
+function sendUserAudio(ws: WebSocket, audioChunk: string) {
+  sendJson(ws, { type: "user_audio_chunk", audio_chunk: audioChunk });
+}
+
 /**
  * Extract only FINAL complete agent turns.
  * Ignores streaming parts (agent_chat_response_part) and non-final types.
@@ -211,7 +227,7 @@ function buildKickoff(intent: BridgePairIntent): string {
     `Company key: ${intent.companyKey}.`,
     "RULES: One idea per turn (1–3 short sentences). Always answer them. Never send only '…' or partial words. Never re-greet after the call has started. Never speak tool names.",
     "Open once: AI disclosure + job from JSON (use their real city/ZIP) + ask for itemized total. Then listen.",
-    "When you have a firm total: log_quote then close_session. Callback-only: close_session as callback_commitment. Hard refuse: documented_decline.",
+    "When you have a firm total: log_quote then close_session. Callback-only: close_session as callback_commitment. Hard refuse: documented_decline. Never accept, book, schedule, purchase, authorize work, or say go ahead; only ask for a written quote or callback window for human review.",
     `Job JSON: ${JSON.stringify(job)}`,
   ];
   if (intent.playbookHint) {
@@ -253,6 +269,7 @@ export async function runAgentBridge(
 
   const seenNeg = new Set<string>();
   const seenCtr = new Set<string>();
+  const audioForwarded = { negotiator: false, counter: false };
   const pendingByRole: Partial<
     Record<"negotiator" | "counter", PendingTurn>
   > = {};
@@ -269,19 +286,21 @@ export async function runAgentBridge(
   const relTs = () => Math.max(0, Date.now() - sessionStartMs);
 
   const append = async (speaker: string, text: string) => {
+    const clean = sanitizeTranscriptText(text);
+    if (!clean) return;
     const ts_ms = relTs();
-    spoken.push({ speaker, text });
+    spoken.push({ speaker, text: clean });
     await store.appendTranscript({
       session_id: intent.sessionId,
       ts_ms,
       speaker,
-      text,
+      text: clean,
     });
     publish({
       type: "transcript",
       job_id: intent.jobId,
       session_id: intent.sessionId,
-      payload: { speaker, text, ts_ms },
+      payload: { speaker, text: clean, ts_ms },
     });
   };
 
@@ -414,7 +433,11 @@ export async function runAgentBridge(
     seen: Set<string>
   ) => {
     if (closed) return;
-    const trimmed = text.trim();
+    const clean = sanitizeTranscriptText(text);
+    if (!clean) return;
+    const trimmed = fromRole === "negotiator"
+      ? enforceNoBookingCommitment(clean)
+      : clean;
     if (!trimmed) return;
 
     // Prefer longest unique key to collapse "Hello" → "Hello, I am..." supersedes
@@ -441,7 +464,11 @@ export async function runAgentBridge(
       return;
     }
 
-    if (to.readyState === WebSocket.OPEN && !closed) {
+    if (
+      to.readyState === WebSocket.OPEN &&
+      !closed &&
+      !audioForwarded[fromRole]
+    ) {
       sendUserMessage(to, trimmed);
     }
   };
@@ -531,6 +558,12 @@ export async function runAgentBridge(
             event_id: eventId,
           });
           return;
+        }
+
+        const audioChunk = extractAudioChunk(msg);
+        if (audioChunk && to.readyState === WebSocket.OPEN && !closed) {
+          audioForwarded[fromRole] = true;
+          sendUserAudio(to, audioChunk);
         }
 
         const agentText = extractFinalAgentText(msg);

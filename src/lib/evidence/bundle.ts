@@ -59,11 +59,14 @@ export async function buildEvidenceBundle(input: EvidenceBundleInput): Promise<B
     "manifest.json",
     JSON.stringify(
       {
-        schema_version: 1,
+        schema_version: 2,
         generated_at: input.generated_at,
         job: input.job,
         vertical_name: input.vertical_name,
         questions_before_booking: input.questions_before_booking,
+        execution_provenance: input.tool_calls
+          .filter((event) => event.tool_name === "execution_provenance" || event.tool_name === "live_execution_result")
+          .map((event) => ({ session_id: event.session_id, type: event.tool_name, ...event.payload })),
         disclaimer:
           "Evidence only. This bundle does not authorize work, payment, booking, or purchase.",
       },

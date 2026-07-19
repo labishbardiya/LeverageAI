@@ -3,6 +3,7 @@ import { getStore } from "@/lib/db";
 import { storeRecordingBuffer } from "@/lib/elevenlabs/recordings";
 import { verifyElevenLabsWebhook } from "@/lib/security/elevenlabsWebhook";
 import type { Session } from "@/lib/types";
+import { sanitizeTranscriptText } from "@/lib/evidence/transcript";
 
 export const runtime = "nodejs";
 
@@ -67,7 +68,7 @@ async function ingestTranscript(
   let added = 0;
   for (let index = 0; index < incoming.length; index += 1) {
     const turn = record(incoming[index]);
-    const text = stringValue(turn.message ?? turn.text);
+    const text = sanitizeTranscriptText(turn.message ?? turn.text);
     if (!text) continue;
     const role = stringValue(turn.role) ?? "unknown";
     const speaker = transcriptSpeaker(role, session, conversationId);
