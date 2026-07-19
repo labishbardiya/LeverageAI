@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
           payload: {
             requested_mode: parsed.data.live === true ? "live" : forceSimulate ? "simulation" : "automatic",
             actual_mode: wantLive ? "live" : "simulation",
-            transport: wantLive ? "elevenlabs_duplex_audio_with_text_fallback" : "deterministic_server_simulation",
+            transport: wantLive ? "elevenlabs_voice_agents_text_mediation" : "deterministic_server_simulation",
             fallback_used: false,
           },
         }),

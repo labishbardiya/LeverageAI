@@ -1,6 +1,8 @@
 /**
- * Agent-to-agent bridge using duplex ElevenLabs audio when audio events are
- * available, with final-text mediation only as a compatibility fallback.
+ * Agent-to-agent bridge using final-text mediation between live ElevenLabs
+ * voice agents. This is the reliable production transport: each agent still
+ * generates a real ElevenLabs voice response and recording, while the spoken
+ * semantic turn is delivered to the peer as text.
  *
  * ElevenLabs audio-chunk relay is fragile server-side. Official client events
  * support `user_message` text input that triggers the same response flow as
@@ -33,6 +35,9 @@ const MAX_TURNS = 18;
 const FINAL_DEBOUNCE_MS = 750;
 /** Longer wait when text looks truncated mid-phrase. */
 const INCOMPLETE_DEBOUNCE_MS = 1400;
+// Raw PCM relay remains opt-in until its VAD turn-boundary behavior is proven
+// for every configured agent. Production defaults to reliable text mediation.
+const USE_AUDIO_RELAY = process.env.ELEVENLABS_AUDIO_RELAY === "1";
 
 export type BridgeResult = {
   sessionId: string;
@@ -610,7 +615,12 @@ export async function runAgentBridge(
         touch();
 
         const audioChunk = extractAudioChunk(msg);
-        if (audioChunk && to.readyState === WebSocket.OPEN && !closed) {
+        if (
+          USE_AUDIO_RELAY &&
+          audioChunk &&
+          to.readyState === WebSocket.OPEN &&
+          !closed
+        ) {
           audioForwarded[fromRole] = true;
           sendUserAudio(to, audioChunk);
           scheduleAudioTurnEnd(fromRole, to);
