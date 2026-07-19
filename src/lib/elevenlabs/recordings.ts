@@ -109,6 +109,17 @@ export async function fetchAndStoreRecording(
     console.warn("[recordings] audio fetch failed", e);
   }
 
-  await store.updateSession(sessionId, { audio_url, recording_note });
-  return { audio_url, meta };
+  if (audio_url) {
+    await store.updateSession(sessionId, { audio_url, recording_note });
+    return { audio_url, meta };
+  }
+
+  // post_call_audio may have won the race and already persisted the canonical
+  // recording. A later REST retry must never erase that successful URL.
+  const existing = await store.getSession(sessionId);
+  if (existing?.audio_url) {
+    return { audio_url: existing.audio_url, meta };
+  }
+  await store.updateSession(sessionId, { recording_note });
+  return { audio_url: null, meta };
 }
