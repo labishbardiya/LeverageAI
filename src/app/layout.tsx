@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
-import { Inter, Fredoka, Geist_Mono } from "next/font/google";
+import { Inter, Instrument_Serif, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -10,11 +10,10 @@ const inter = Inter({
   display: "swap",
 });
 
-/** Rounded display close to Alaska logo lettering */
-const alaska = Fredoka({
-  variable: "--font-alaska",
+const instrument = Instrument_Serif({
+  variable: "--font-instrument",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: "400",
   display: "swap",
 });
 
@@ -24,9 +23,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LEVERAGE — Better deals. Less phone tag.",
+  title: "LEVERAGE — You name the job. We lock the price.",
   description:
-    "Describe the job once. We negotiate with three providers in parallel and hand you one clear recommendation.",
+    "One job. Three shops. One clear pick. Agents negotiate in parallel so you get the best deal without phone tag.",
 };
 
 export default function RootLayout({
@@ -37,7 +36,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${alaska.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${instrument.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body
         className="flex min-h-full flex-col text-[var(--ink)]"
@@ -47,7 +46,7 @@ export default function RootLayout({
             ["--font-inter" as string]:
               "var(--font-inter-loaded), Inter, system-ui, sans-serif",
             ["--font-logo" as string]:
-              "var(--font-alaska), Fredoka, system-ui, sans-serif",
+              "var(--font-instrument), 'Instrument Serif', Georgia, serif",
           } as CSSProperties
         }
       >

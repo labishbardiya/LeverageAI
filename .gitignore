@@ -44,3 +44,5 @@ next-env.d.ts
 demo-video/
 public/LeverageAI_Intro.mp4
 *.mp4
+!public/media/
+!public/media/**

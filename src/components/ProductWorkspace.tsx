@@ -23,6 +23,8 @@ import type {
 import { demoJobSpec } from "@/lib/ui/types";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { LearningPanel } from "./LearningPanel";
+import { Top3Map } from "./Top3Map";
+import { openDealPdf } from "@/lib/ui/exportDealPdf";
 
 const MODES = [
   {
@@ -191,36 +193,98 @@ type StatusStepId = (typeof STATUS_STEPS)[number]["id"];
 function CloudBackdrop() {
   return (
     <div className="cloud-sky" aria-hidden>
+      <video
+        className="cloud-video"
+        autoPlay
+        muted
+        loop
+        playsInline
+        poster="/media/clouds-poster.jpg"
+      >
+        <source src="/media/clouds-loop.mp4" type="video/mp4" />
+      </video>
       <div className="cloud cloud-a" />
       <div className="cloud cloud-b" />
       <div className="cloud cloud-c" />
-      <div className="cloud cloud-d" />
-      <div className="cloud cloud-e" />
     </div>
   );
 }
 
-function StatusStrip({ active }: { active: StatusStepId | null }) {
-  if (!active) return null;
-  const idx = STATUS_STEPS.findIndex((s) => s.id === active);
+/** Real-time progress 0–100 from agent activity */
+function progressFromState(
+  step: StatusStepId | null,
+  sessions: { status: string; transcript: unknown[] }[],
+  dealReady: boolean,
+): number {
+  if (dealReady || step === "ready") return 100;
+  if (step === "build") return 88;
+  if (step === "match") return 18;
+  if (step === "connect") return 32;
+  if (step === "negotiate" || sessions.length > 0) {
+    const n = Math.max(1, sessions.length);
+    const live = sessions.filter(
+      (s) => s.status === "negotiating" || s.status === "dialing",
+    ).length;
+    const done = sessions.filter(
+      (s) => s.status === "done" || s.status === "declined",
+    ).length;
+    const msgs = sessions.reduce(
+      (a, s) => a + (s.transcript?.length || 0),
+      0,
+    );
+    const msgPart = Math.min(30, msgs * 1.2);
+    const donePart = (done / n) * 40;
+    const livePart = (live / n) * 10;
+    return Math.min(86, Math.round(35 + msgPart + donePart + livePart));
+  }
+  return step ? 12 : 0;
+}
+
+function StatusStrip({
+  active,
+  progress,
+}: {
+  active: StatusStepId | null;
+  progress: number;
+}) {
+  if (!active && progress <= 0) return null;
+  const idx = active
+    ? STATUS_STEPS.findIndex((s) => s.id === active)
+    : progress >= 100
+      ? STATUS_STEPS.length - 1
+      : 0;
   return (
-    <div className="status-strip glass-panel-strong mx-auto max-w-3xl">
-      {STATUS_STEPS.map((step, i) => (
-        <span key={step.id} className="contents">
-          {i > 0 && <span className="status-step-sep" aria-hidden />}
-          <span
-            className={`status-step ${
-              i < idx ? "is-done" : i === idx ? "is-active" : ""
-            }`}
-          >
-            {i === idx && <span className="pulse-dot" />}
-            {i < idx && (
-              <span className="text-[11px] text-[var(--success)]">✓</span>
-            )}
-            {step.label}
+    <div className="status-strip glass-liquid mx-auto max-w-3xl">
+      <div
+        className="status-progress-track"
+        role="progressbar"
+        aria-valuenow={progress}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className="status-progress-fill"
+          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+        />
+      </div>
+      <div className="status-steps-row">
+        {STATUS_STEPS.map((step, i) => (
+          <span key={step.id} className="contents">
+            {i > 0 && <span className="status-step-sep" aria-hidden />}
+            <span
+              className={`status-step ${
+                i < idx ? "is-done" : i === idx ? "is-active" : ""
+              }`}
+            >
+              {i === idx && <span className="pulse-dot" />}
+              {i < idx && (
+                <span className="text-[11px] text-[var(--success)]">✓</span>
+              )}
+              {step.label}
+            </span>
           </span>
-        </span>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -273,7 +337,16 @@ function WaChat({
             {live ? "Connecting…" : "Waiting to start"}
           </p>
         )}
-        {lines.map((line) => {
+        {lines
+          .filter((line) => {
+            const t = (line.text || "").trim();
+            if (!t || t === "…" || t === "..." || t.length < 2) return false;
+            // Drop useless partials that look like truncated speech
+            if (/^(Hello|Hi|Yes|I am|I'|We)[,.]?\s*(\.\.\.|…)?$/i.test(t))
+              return false;
+            return true;
+          })
+          .map((line) => {
           const out = line.speaker === "negotiator";
           const sec = relativeSeconds(lines, line);
           return (
@@ -807,54 +880,44 @@ export function ProductWorkspace() {
 
   const showResults = stage === "working" || stage === "done" || Boolean(state);
 
+  const progressPct = progressFromState(
+    statusStep,
+    sessions,
+    dealReady,
+  );
+
   const exportReport = () => {
-    const payload = {
-      exported_at: new Date().toISOString(),
+    openDealPdf({
       vertical: vertical?.id,
-      job_id: state?.job_id,
-      job_spec: state?.job_spec,
-      deal_review: dealReview || null,
+      jobId: state?.job_id,
+      jobSpec: state?.job_spec || null,
+      headline:
+        dealReview?.headline ||
+        (top
+          ? `Your deal: ${top.session.vendor_name}${
+              top.session.current_price != null
+                ? ` at ${formatUsd(top.session.current_price)}`
+                : ""
+            }`
+          : "Your deal"),
+      whyTop: dealReview?.why_top || [],
+      others: dealReview?.how_others_compared || [],
+      confidence: dealReview?.confidence,
       ranked: ranked.map((r) => ({
         rank: r.rank,
-        vendor_id: r.session.vendor_id,
-        vendor_name: r.session.vendor_name,
-        total: r.session.current_price,
-        recommended: r.recommended,
-        red_flag: r.red_flag,
-        why: r.why,
-        outcome: r.session.outcome,
-        line_items: r.session.line_items,
+        name: r.session.vendor_name,
+        total:
+          r.session.current_price != null
+            ? formatUsd(r.session.current_price)
+            : r.session.outcome === "documented_decline"
+              ? "No phone quote"
+              : r.session.outcome === "callback_commitment"
+                ? "Callback"
+                : "—",
+        note: r.why,
+        recommended: r.recommended && !r.red_flag,
       })),
-      quotes: sessions.map((s) => ({
-        vendor_id: s.vendor_id,
-        vendor_name: s.vendor_name,
-        status: s.status,
-        current_price: s.current_price,
-        outcome: s.outcome,
-        line_items: s.line_items,
-        red_flag: s.red_flag,
-      })),
-      transcripts: sessions.map((s) => ({
-        vendor_id: s.vendor_id,
-        vendor_name: s.vendor_name,
-        lines: s.transcript.map((l) => ({
-          speaker: l.speaker,
-          text: l.text,
-          ts: l.ts,
-        })),
-      })),
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `leverage-deal-${state?.job_id || "report"}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -863,23 +926,15 @@ export function ProductWorkspace() {
         <CloudBackdrop />
 
         <div className="portal-content">
-        <header className="glass-header sticky top-0 z-30">
-          <div className="mx-auto flex max-w-[var(--max)] items-center justify-between px-4 py-3 sm:px-6">
-            <a href="/" className="logo-mark no-underline" aria-label="LEVERAGE home">
-              <span className="logo-leverage">LEVERAGE</span>
+        <header className="portal-header-merge sticky top-0 z-30">
+          <div className="mx-auto flex max-w-[var(--max)] items-center justify-between px-4 py-4 sm:px-6">
+            <a href="/" className="no-underline" aria-label="LEVERAGE home">
+              <span className="logo-leverage logo-plain">LEVERAGE</span>
             </a>
-            <nav className="flex items-center gap-4">
-              <a
-                href="/live"
-                className="text-[12px] text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--ink)] hover:underline"
-              >
-                Sample replay
-              </a>
-            </nav>
           </div>
         </header>
 
-        <main className="mx-auto max-w-[var(--max)] px-3 pb-24 pt-8 sm:px-5 sm:pt-12">
+        <main className="mx-auto max-w-[var(--max)] px-3 pb-24 pt-6 sm:px-5 sm:pt-10">
           {/* Hero + composer */}
           <section
             className={`mx-auto flex flex-col items-center text-center ${
@@ -888,12 +943,12 @@ export function ProductWorkspace() {
           >
             {!showResults && (
               <>
-                <h1 className="text-[28px] font-semibold tracking-tight sm:text-[34px]">
-                  Better deals. Less phone tag.
+                <h1 className="font-instrument text-[30px] tracking-tight sm:text-[36px]">
+                  <span className="block">You name the job.</span>
+                  <span className="block">We lock the price.</span>
                 </h1>
                 <p className="mt-3 max-w-md text-[15px] leading-relaxed text-[var(--ink-secondary)]">
-                  Describe the job once. Three shops negotiate in parallel —
-                  one clear recommendation.
+                  One job. Three shops. One clear pick.
                 </p>
               </>
             )}
@@ -988,32 +1043,34 @@ export function ProductWorkspace() {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={busy}
-                  className="rounded-full border border-[var(--border-dark)] bg-white/40 px-3 py-1.5 text-[13px] text-[var(--ink-secondary)] hover:bg-white/70 disabled:opacity-50"
+                  className="icon-plus"
+                  aria-label="Upload document or image"
+                  title="Upload"
                 >
-                  Upload
+                  +
                 </button>
                 <button
                   type="button"
                   onClick={() => void onTalk()}
                   disabled={busy}
-                  className="rounded-full border border-[var(--border-dark)] bg-white/40 px-3 py-1.5 text-[13px] text-[var(--ink-secondary)] hover:bg-white/70 disabled:opacity-50"
+                  className="link-cta text-[13px]"
                 >
-                  Talk to Leverage
+                  Talk
                 </button>
                 <button
                   type="button"
                   disabled={busy || !vertical}
                   onClick={fillSampleJob}
-                  className="rounded-full border border-[var(--border-dark)] bg-white/40 px-3 py-1.5 text-[13px] text-[var(--ink-secondary)] hover:bg-white/70 disabled:opacity-50"
+                  className="link-cta text-[13px]"
                 >
-                  Use sample job
+                  Sample
                 </button>
                 <button
                   type="submit"
                   disabled={busy || !vertical}
-                  className="ml-auto rounded-full bg-[var(--accent)] px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
+                  className="link-cta ml-auto text-[14px] font-semibold"
                 >
-                  {busy ? "Working…" : "Send"}
+                  {busy ? "Working…" : "Send →"}
                 </button>
               </div>
             </form>
@@ -1042,10 +1099,10 @@ export function ProductWorkspace() {
             )}
           </section>
 
-          {/* Progressive status strip */}
-          {showResults && statusStep && (
+          {/* Progressive status strip — green bar tracks live agent work */}
+          {showResults && (
             <div className="mb-5 stage-enter">
-              <StatusStrip active={statusStep} />
+              <StatusStrip active={statusStep} progress={progressPct} />
               {error && (
                 <p className="mt-2 text-center text-[13px] text-[var(--danger)]">
                   {error}
@@ -1104,6 +1161,7 @@ export function ProductWorkspace() {
                   );
                 })}
               </div>
+              <Top3Map vertical={vertical.id} zip={discoveryZip} />
             </section>
           )}
 
@@ -1126,9 +1184,9 @@ export function ProductWorkspace() {
                   <button
                     type="button"
                     onClick={exportReport}
-                    className="btn-pill btn-pill-primary shrink-0"
+                    className="link-cta shrink-0 text-[13px] font-semibold"
                   >
-                    Export report
+                    Export PDF →
                   </button>
                 )}
               </div>
@@ -1144,12 +1202,12 @@ export function ProductWorkspace() {
                   <p className="text-[20px] font-semibold tracking-tight">
                     {dealReview?.headline ||
                       (top
-                        ? `Recommended: ${top.session.vendor_name}${
+                        ? `Your deal: ${top.session.vendor_name}${
                             top.session.current_price != null
                               ? ` at ${formatUsd(top.session.current_price)}`
                               : ""
                           }`
-                        : "Comparing outcomes…")}
+                        : "Your deal")}
                   </p>
                   {dealReview?.why_top?.length ? (
                     <ul className="space-y-1.5 text-[14px] text-[var(--ink-secondary)]">

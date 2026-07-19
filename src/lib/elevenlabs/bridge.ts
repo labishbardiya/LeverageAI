@@ -190,14 +190,15 @@ function buildKickoff(intent: BridgePairIntent): string {
     /* ignore */
   }
   const parts = [
-    "Live negotiation start. You are the homeowner's AI buying agent.",
+    "You are on a live call with a vendor dispatcher. Sound like a calm buying consultant.",
     `Company key: ${intent.companyKey}.`,
-    "Open once: brief AI disclosure, state the job from JSON, ask for an itemized installed total.",
-    "NEVER speak tool names. Invoke tools silently. After a firm total: log_quote then close_session. After callback-only: close_session as callback_commitment. Keep turns short.",
+    "RULES: One idea per turn (1–3 short sentences). Always answer them. Never send only '…' or partial words. Never re-greet after the call has started. Never speak tool names.",
+    "Open once: AI disclosure + job from JSON + ask for itemized installed total. Then listen.",
+    "When you have a firm total: log_quote then close_session. Callback-only: close_session as callback_commitment. Hard refuse: documented_decline.",
     `Job JSON: ${JSON.stringify(job)}`,
   ];
   if (intent.playbookHint) {
-    parts.push(`Playbook (prefer these tactics; never invent $): ${intent.playbookHint}`);
+    parts.push(`Playbook (soft tactics only; never invent $): ${intent.playbookHint}`);
   }
   return parts.join(" ");
 }
