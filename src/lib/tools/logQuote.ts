@@ -39,15 +39,32 @@ function normalizeBody(raw: unknown): unknown {
   const vendor_id =
     (b.vendor_id as string | undefined) ??
     (b.company_key as string | undefined);
+  const coerceNum = (v: unknown): number | undefined => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)))
+      return Number(v);
+    return undefined;
+  };
   const total =
-    (b.total as number | undefined) ??
-    (b.grand_total as number | undefined);
+    coerceNum(b.total) ??
+    coerceNum(b.grand_total);
+
+  // Coerce line item amounts (ElevenLabs often sends strings)
+  let coercedItems = line_items;
+  if (Array.isArray(line_items)) {
+    coercedItems = line_items.map((li) => {
+      if (!li || typeof li !== "object") return li;
+      const o = li as Record<string, unknown>;
+      const amount = coerceNum(o.amount);
+      return amount !== undefined ? { ...o, amount } : o;
+    });
+  }
 
   return {
     session_id: b.session_id,
     job_id: b.job_id,
     vendor_id,
-    line_items,
+    line_items: coercedItems,
     total,
     notes: b.notes,
     // accepted but unused for storage (session already has vendor_name)

@@ -241,7 +241,7 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
         type="button"
         disabled={busy || loading}
         onClick={onContinue}
-        className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+        className="btn-pill btn-pill-primary w-full py-2.5 disabled:opacity-50"
       >
         {busy ? "Starting live negotiations…" : "Start negotiations"}
       </button>

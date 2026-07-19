@@ -1,72 +1,200 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap");
 
+/* ElevenLabs-inspired design system (DESIGN.md) */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --accent: #059669;
+  --color-eggshell: #fdfcfc;
+  --color-warm-taupe: #f5f3f1;
+  --color-stone: #ebe8e4;
+  --color-ink: #000000;
+  --color-graphite: #44403b;
+  --color-smoke: #777169;
+  --color-ash: #a59f97;
+  --color-violet-spark: #0447ff;
+  --color-ember-orange: #ff4704;
+  --color-button-border: #e5e5e5;
+
+  --background: var(--color-eggshell);
+  --foreground: var(--color-ink);
+
+  --font-waldenburg: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --text-caption: 10px;
+  --text-body-sm: 14px;
+  --text-body: 16px;
+  --text-subheading: 18px;
+  --text-heading-sm: 32px;
+  --text-heading: 36px;
+  --radius-card: 20px;
+  --radius-card-lg: 24px;
+  --radius-pill: 9999px;
+  --shadow-whisper: rgba(0, 0, 0, 0.4) 0px 0px 1px 0px,
+    rgba(0, 0, 0, 0.04) 0px 1px 1px 0px, rgba(0, 0, 0, 0.04) 0px 2px 4px 0px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-eggshell: #fdfcfc;
+  --color-warm-taupe: #f5f3f1;
+  --color-stone: #ebe8e4;
+  --color-ink: #000000;
+  --color-graphite: #44403b;
+  --color-smoke: #777169;
+  --color-ash: #a59f97;
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
-/* Force light mode for judges — no dark theme flip */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background: var(--color-eggshell);
+  color: var(--color-ink);
+  font-family: var(--font-inter);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display / whisper headlines */
+.font-display {
+  font-family: var(--font-waldenburg);
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+}
+
+/* Pill buttons */
+.btn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-inter);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--color-button-border);
+  transition: opacity 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+}
+.btn-pill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-pill-primary {
+  background: var(--color-ink);
+  color: #fff;
+}
+.btn-pill-primary:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.btn-pill-outline {
+  background: var(--color-eggshell);
+  color: var(--color-ink);
+}
+.btn-pill-outline:hover:not(:disabled) {
+  background: var(--color-warm-taupe);
+}
+.btn-pill-ghost {
+  background: transparent;
+  color: var(--color-ink);
+}
+
+/* Cards */
+.card-taupe {
+  background: var(--color-warm-taupe);
+  border-radius: var(--radius-card);
+  padding: 1.25rem 1.5rem;
+}
+.card-white {
+  background: var(--color-eggshell);
+  border-radius: var(--radius-card);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-whisper);
+  border: 1px solid var(--color-stone);
+}
+.card-white-flat {
+  background: var(--color-eggshell);
+  border-radius: var(--radius-card);
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-stone);
+}
+
+.hairline {
+  border-color: var(--color-stone);
+}
+
+/* Section label */
+.label-section {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-smoke);
+}
+
+/* Product spark sphere (accent only — not UI chrome) */
+.audio-sphere {
+  width: 48px;
+  height: 48px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at 35% 35%,
+    #ff9a7a 0%,
+    var(--color-ember-orange) 35%,
+    var(--color-violet-spark) 75%,
+    #1a1a2e 100%
+  );
+  box-shadow: 0 0 24px rgba(4, 71, 255, 0.15);
 }
 
 @keyframes price-flash-down {
   0% {
-    background-color: rgb(220 252 231);
-    transform: scale(1.04);
+    background-color: #f5f3f1;
+    transform: scale(1.03);
   }
   100% {
     background-color: transparent;
     transform: scale(1);
   }
 }
-
 @keyframes price-flash-up {
   0% {
-    background-color: rgb(255 228 230);
-    transform: scale(1.04);
+    background-color: #ebe8e4;
+    transform: scale(1.03);
   }
   100% {
     background-color: transparent;
     transform: scale(1);
   }
 }
-
 .price-flash-down {
   animation: price-flash-down 0.9s ease-out;
   border-radius: 0.25rem;
 }
-
 .price-flash-up {
   animation: price-flash-up 0.9s ease-out;
   border-radius: 0.25rem;
 }
 
-/* Subtle scrollbar for dense columns */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: var(--color-stone) transparent;
 }
 
-/* WhatsApp-style chat bubbles + send-in animation */
+/* Chat — editorial, not WhatsApp green */
 .wa-chat-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #94a3b8 transparent;
+  scrollbar-color: var(--color-ash) transparent;
 }
-
-/* Incoming (agent) — tail on left */
 .wa-bubble-in {
-  border-radius: 0 10px 10px 10px;
+  border-radius: 0 12px 12px 12px;
+  background: #fff;
+  border: 1px solid var(--color-stone);
 }
 .wa-bubble-in::before {
   content: "";
@@ -77,12 +205,12 @@ body {
   height: 0;
   border-style: solid;
   border-width: 0 8px 8px 0;
-  border-color: transparent #fff transparent transparent;
+  border-color: transparent var(--color-stone) transparent transparent;
 }
-
-/* Outgoing (provider) — tail on right, WhatsApp green */
 .wa-bubble-out {
-  border-radius: 10px 0 10px 10px;
+  border-radius: 12px 0 12px 12px;
+  background: var(--color-warm-taupe);
+  border: 1px solid var(--color-stone);
 }
 .wa-bubble-out::before {
   content: "";
@@ -93,31 +221,100 @@ body {
   height: 0;
   border-style: solid;
   border-width: 0 0 8px 8px;
-  border-color: transparent transparent transparent #d9fdd3;
+  border-color: transparent transparent transparent var(--color-warm-taupe);
 }
 
-/* Latest WhatsApp-like “message sent” pop: scale + rise + fade */
 @keyframes wa-message-in {
   0% {
     opacity: 0;
-    transform: translateY(12px) scale(0.92);
-  }
-  60% {
-    opacity: 1;
-    transform: translateY(-2px) scale(1.02);
+    transform: translateY(10px) scale(0.96);
   }
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
-
 .wa-msg-in {
-  animation: wa-message-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: wa-message-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-
 @media (prefers-reduced-motion: reduce) {
   .wa-msg-in {
     animation: none;
   }
+}
+
+/* Utility overrides for slate/emerald → design system during transition */
+.bg-slate-50 {
+  background-color: var(--color-eggshell) !important;
+}
+.bg-slate-100 {
+  background-color: var(--color-warm-taupe) !important;
+}
+.bg-white {
+  background-color: var(--color-eggshell) !important;
+}
+.border-slate-200,
+.border-slate-100 {
+  border-color: var(--color-stone) !important;
+}
+.text-slate-900 {
+  color: var(--color-ink) !important;
+}
+.text-slate-800,
+.text-slate-700 {
+  color: var(--color-graphite) !important;
+}
+.text-slate-600,
+.text-slate-500 {
+  color: var(--color-smoke) !important;
+}
+.text-slate-400 {
+  color: var(--color-ash) !important;
+}
+.bg-emerald-600,
+.bg-emerald-700,
+.hover\:bg-emerald-700:hover {
+  background-color: var(--color-ink) !important;
+}
+.text-emerald-700,
+.text-emerald-800,
+.text-emerald-900,
+.hover\:text-emerald-700:hover {
+  color: var(--color-graphite) !important;
+}
+.bg-emerald-50,
+.bg-emerald-50\/40 {
+  background-color: var(--color-warm-taupe) !important;
+}
+.border-emerald-100,
+.border-emerald-300,
+.ring-emerald-100,
+.ring-emerald-200 {
+  border-color: var(--color-stone) !important;
+  --tw-ring-color: var(--color-stone) !important;
+}
+.from-emerald-50 {
+  --tw-gradient-from: var(--color-warm-taupe) !important;
+}
+.to-white {
+  --tw-gradient-to: var(--color-eggshell) !important;
+}
+.bg-rose-50 {
+  background-color: #faf6f4 !important;
+}
+.text-rose-800,
+.text-rose-600 {
+  color: var(--color-graphite) !important;
+}
+.ring-rose-200 {
+  --tw-ring-color: var(--color-stone) !important;
+}
+.bg-sky-50 {
+  background-color: var(--color-warm-taupe) !important;
+}
+.text-sky-800 {
+  color: var(--color-graphite) !important;
+}
+.ring-sky-200 {
+  --tw-ring-color: var(--color-stone) !important;
 }

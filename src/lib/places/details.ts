@@ -86,15 +86,20 @@ function parseDetails(placeId: string, raw: Record<string, unknown>): PlaceDetai
 
 async function cacheGet(placeId: string): Promise<PlaceDetails | null> {
   if (hasDatabaseUrl()) {
-    const pool = getPool();
-    const { rows } = await pool.query(
-      `SELECT payload, fetched_at FROM providers WHERE place_id = $1`,
-      [placeId]
-    );
-    if (!rows[0]) return null;
-    const fetched = new Date(rows[0].fetched_at).getTime();
-    if (Date.now() - fetched > TTL_MS) return null;
-    return rows[0].payload as PlaceDetails;
+    try {
+      const pool = getPool();
+      const { rows } = await pool.query(
+        `SELECT payload, fetched_at FROM providers WHERE place_id = $1`,
+        [placeId]
+      );
+      if (!rows[0]) return null;
+      const fetched = new Date(rows[0].fetched_at).getTime();
+      if (Date.now() - fetched > TTL_MS) return null;
+      return rows[0].payload as PlaceDetails;
+    } catch {
+      // Table may not exist yet — fall through to network / snapshot
+      return null;
+    }
   }
   const p = join(process.cwd(), "data", "providers-cache", `${placeId}.json`);
   if (!existsSync(p)) return null;
@@ -109,14 +114,18 @@ async function cacheGet(placeId: string): Promise<PlaceDetails | null> {
 
 async function cacheSet(details: PlaceDetails): Promise<void> {
   if (hasDatabaseUrl()) {
-    const pool = getPool();
-    await pool.query(
-      `INSERT INTO providers (place_id, vertical, payload, fetched_at)
-       VALUES ($1, $2, $3::jsonb, now())
-       ON CONFLICT (place_id) DO UPDATE
-       SET payload = EXCLUDED.payload, fetched_at = now()`,
-      [details.place_id, null, JSON.stringify(details)]
-    );
+    try {
+      const pool = getPool();
+      await pool.query(
+        `INSERT INTO providers (place_id, vertical, payload, fetched_at)
+         VALUES ($1, $2, $3::jsonb, now())
+         ON CONFLICT (place_id) DO UPDATE
+         SET payload = EXCLUDED.payload, fetched_at = now()`,
+        [details.place_id, null, JSON.stringify(details)]
+      );
+    } catch {
+      /* providers table optional */
+    }
     return;
   }
   const dir = join(process.cwd(), "data", "providers-cache");

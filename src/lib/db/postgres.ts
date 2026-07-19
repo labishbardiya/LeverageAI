@@ -387,13 +387,17 @@ export class PostgresStore implements DataStore {
     limit = 200
   ): Promise<TranscriptEvent[]> {
     const pool = getPool();
+    // Latest N events (match memory store), chronological order for UI
     const { rows } = await pool.query(
-      `SELECT t.*
-       FROM transcript_events t
-       INNER JOIN sessions s ON s.id = t.session_id
-       WHERE s.job_id = $1
-       ORDER BY t.id ASC
-       LIMIT $2`,
+      `SELECT * FROM (
+         SELECT t.*
+         FROM transcript_events t
+         INNER JOIN sessions s ON s.id = t.session_id
+         WHERE s.job_id = $1
+         ORDER BY t.id DESC
+         LIMIT $2
+       ) recent
+       ORDER BY id ASC`,
       [job_id, limit]
     );
     return rows.map(mapTranscript);

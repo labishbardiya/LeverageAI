@@ -138,7 +138,10 @@ export function buildClientDealReview(
   sessions: SessionCard[],
   vertical: VerticalConfig,
 ): import("./types").DealReviewUi {
-  const top = ranked.find((r) => r.recommended) || ranked[0] || null;
+  const top =
+    ranked.find((r) => r.recommended && !r.red_flag) ||
+    ranked.find((r) => !r.red_flag && r.session.current_price != null) ||
+    null;
   const formatUsd = (n: number) =>
     new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -837,6 +840,9 @@ export function normalizeApiState(
         red_flag: rf.red_flag,
         red_flag_pct: rf.red_flag_pct,
         why: String(rq.notes || session?.why || ""),
+        leverage_chain: Array.isArray(rq.leverage_chain)
+          ? (rq.leverage_chain as RankedDeal["leverage_chain"])
+          : undefined,
       };
     });
 

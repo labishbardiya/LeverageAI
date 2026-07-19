@@ -215,7 +215,7 @@ export function JobColumn({
             type="button"
             disabled={locked}
             onClick={() => void startVoiceIntake()}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+            className="btn-pill btn-pill-primary disabled:opacity-40"
           >
             <MicIcon />
             Start voice intake
@@ -280,7 +280,7 @@ export function JobColumn({
         type="button"
         disabled={locked}
         onClick={useDemo}
-        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+        className="btn-pill btn-pill-outline w-full disabled:opacity-40"
       >
         {copy.demo_job_button}
       </button>
@@ -315,7 +315,7 @@ export function JobColumn({
         type="button"
         disabled={!hasSpec || locked || busy}
         onClick={onConfirm}
-        className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+        className="btn-pill btn-pill-primary w-full py-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
       >
         {locked
           ? phase === "calling"

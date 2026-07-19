@@ -255,29 +255,6 @@ export async function runAgentBridge(
       openConversationSocket(intent.counterAgentId, apiKey),
     ]);
 
-    sendInit(negWs, intent, "negotiator");
-    sendInit(ctrWs, intent, "counter");
-
-    await store.updateSession(intent.sessionId, {
-      status: "live",
-      last_event_at: new Date().toISOString(),
-    });
-    publish({
-      type: "session",
-      job_id: intent.jobId,
-      session_id: intent.sessionId,
-      payload: { status: "live" },
-    });
-
-    // Small delay so initiation is processed
-    await new Promise((r) => setTimeout(r, 400));
-
-    // Kickoff: synthetic homeowner brief so the negotiator opens the call.
-    // (Not shown as a chat bubble — it's internal orchestration, not spoken.)
-    const kickoff = buildKickoff(intent);
-    sendUserMessage(negWs, kickoff);
-    touch();
-
     const handleSide = (
       from: WebSocket,
       to: WebSocket,
@@ -341,8 +318,32 @@ export async function runAgentBridge(
       });
     };
 
+    // Register listeners BEFORE init/kickoff so first agent_response is not dropped
     handleSide(negWs, ctrWs, "negotiator", seenNeg);
     handleSide(ctrWs, negWs, "counter", seenCtr);
+
+    sendInit(negWs, intent, "negotiator");
+    sendInit(ctrWs, intent, "counter");
+
+    await store.updateSession(intent.sessionId, {
+      status: "live",
+      last_event_at: new Date().toISOString(),
+    });
+    publish({
+      type: "session",
+      job_id: intent.jobId,
+      session_id: intent.sessionId,
+      payload: { status: "live" },
+    });
+
+    // Small delay so initiation is processed
+    await new Promise((r) => setTimeout(r, 400));
+
+    // Kickoff: synthetic homeowner brief so the negotiator opens the call.
+    // (Not shown as a chat bubble — it's internal orchestration, not spoken.)
+    const kickoff = buildKickoff(intent);
+    sendUserMessage(negWs, kickoff);
+    touch();
 
     await new Promise<void>((resolve) => {
       const done = () => {

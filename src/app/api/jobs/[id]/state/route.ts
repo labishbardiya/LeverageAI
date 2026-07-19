@@ -44,6 +44,14 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       }),
     }));
 
+    const sessionsEnriched = sessions.map((s) => ({
+      ...s,
+      competing_bid_used: tool_calls.some(
+        (t) =>
+          t.session_id === s.id && t.tool_name === "get_competing_bids"
+      ),
+    }));
+
     const deal_review =
       job.status === "complete" ||
       sessions.every((s) => s.outcome_type != null)
@@ -59,7 +67,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
     return NextResponse.json({
       job,
-      sessions,
+      sessions: sessionsEnriched,
       quotes,
       transcripts,
       tool_calls,

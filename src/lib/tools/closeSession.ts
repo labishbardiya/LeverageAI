@@ -71,6 +71,11 @@ export async function closeSession(raw: unknown): Promise<CloseSessionResult> {
     };
   }
 
+  // Idempotent: never overwrite a terminal outcome
+  if (existing.outcome_type != null || existing.status === "closed") {
+    return { ok: true, session: existing };
+  }
+
   if (job_id && existing.job_id !== job_id) {
     return {
       ok: false,

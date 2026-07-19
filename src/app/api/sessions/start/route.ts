@@ -128,8 +128,13 @@ export async function POST(req: NextRequest) {
             s.status === "error" ||
             s.outcome_type != null
         );
-      // Re-kick simulate only if nothing has landed yet (crash before first outcome).
-      const neverStarted = !anyOutcome && job.status === "running";
+      // Re-kick only if nothing has landed AND no session is already mid-call
+      // (avoids parallel double-simulate races).
+      const inFlight = existing.some(
+        (s) => s.status === "live" || s.status === "connecting"
+      );
+      const neverStarted =
+        !anyOutcome && !inFlight && job.status === "running";
       if (neverStarted && wantSimulate && !wantLive) {
         const jobId = job.id;
         scheduleBackground(async () => {
@@ -305,6 +310,12 @@ export async function POST(req: NextRequest) {
               );
             }
           }
+          await storeE.updateJob(jobId, { status: "complete" });
+          publish({
+            type: "job",
+            job_id: jobId,
+            payload: { status: "complete" },
+          });
         }
       });
     } else if (wantSimulate) {

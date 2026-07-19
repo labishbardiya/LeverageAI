@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { CSSProperties } from "react";
+import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter-loaded",
   subsets: ["latin"],
+  weight: ["300", "400", "500"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -15,7 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "LeverageAI — The Negotiator",
   description:
-    "AI voice agent that phone-shops and haggles vendor quotes with honest, evidence-backed leverage.",
+    "AI voice agents that phone-shop and haggle vendor quotes with honest, evidence-backed leverage.",
 };
 
 export default function RootLayout({
@@ -26,9 +29,20 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
+      <body
+        className="flex min-h-full flex-col bg-[var(--color-eggshell)] text-[var(--color-ink)]"
+        style={
+          {
+            fontFamily: "var(--font-inter-loaded), Inter, system-ui, sans-serif",
+            ["--font-inter" as string]:
+              "var(--font-inter-loaded), Inter, system-ui, sans-serif",
+            ["--font-waldenburg" as string]:
+              "var(--font-inter-loaded), Inter, system-ui, sans-serif",
+          } as CSSProperties
+        }
+      >
         {children}
       </body>
     </html>

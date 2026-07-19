@@ -78,3 +78,25 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS counter_conversation_id text NULL;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS audio_url text NULL;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS recording_note text NULL;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_event_at timestamptz NULL;
+
+-- Places cache + learning playbook (optional tables)
+CREATE TABLE IF NOT EXISTS providers (
+  place_id   text PRIMARY KEY,
+  vertical   text NULL,
+  payload    jsonb NOT NULL DEFAULT '{}'::jsonb,
+  fetched_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS negotiation_learnings (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vertical       text NOT NULL,
+  tactic         text NOT NULL,
+  context        text NULL,
+  outcome_delta  double precision NOT NULL DEFAULT 0,
+  sample_count   int NOT NULL DEFAULT 0,
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (vertical, tactic)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_job_vendor_uidx
+  ON sessions (job_id, vendor_id);
