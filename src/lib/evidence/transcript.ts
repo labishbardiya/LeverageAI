@@ -16,7 +16,7 @@ const INTERNAL_PROMPT_MARKERS = [
 export function sanitizeTranscriptText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const text = value.replace(/\s+/g, " ").trim();
-  if (!text || text === "…" || text === "...") return null;
+  if (!text || text === "…" || text === "..." || /(?:\.\.\.|…)$/.test(text)) return null;
   const lower = text.toLowerCase();
   if (INTERNAL_PROMPT_MARKERS.some((marker) => lower.includes(marker))) {
     return null;
