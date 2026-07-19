@@ -1,169 +1,168 @@
 /**
- * Document / image / free-text → JobSpec.
- * Heuristics are primary (always works offline for judges).
- * Optional vision LLMs are NOT required and not used on product path.
+ * Deterministic free-text/document extraction.
+ *
+ * Why deterministic first: the confirmed job specification controls every
+ * negotiation and must never be filled with plausible-but-invented facts.
+ * Config hints extract only values present in the source. Anything uncertain
+ * is returned as a question for the user confirmation step.
  */
-import { z } from "zod";
+import type { JobSpec } from "@/lib/types";
 import { loadVertical } from "@/lib/config/loadVertical";
+import {
+  requiredFieldQuestions,
+  validateJobSpec,
+  type JobSpecIssue,
+} from "./jobSpec";
 
-export const JobSpecZod = z
-  .object({
-    system_type: z.string().optional(),
-    system_age_years: z.number().optional(),
-    tonnage: z.number().optional(),
-    home_sqft: z.number().optional(),
-    symptom: z.string().optional(),
-    ductwork: z.string().optional(),
-    urgency: z.string().optional(),
-    zip: z.string().optional(),
-    notes: z.string().optional(),
-    job_kind: z.string().optional(),
-    job_type: z.string().optional(),
-    // movers
-    move_type: z.string().optional(),
-    from_city: z.string().optional(),
-    to_city: z.string().optional(),
-    bedrooms: z.number().optional(),
-    packing: z.string().optional(),
-    // medical
-    procedure: z.string().optional(),
-    body_part: z.string().optional(),
-    contrast: z.string().optional(),
-    // auto
-    vehicle_year: z.number().optional(),
-    vehicle_make: z.string().optional(),
-    vehicle_model: z.string().optional(),
-  })
-  .passthrough();
-
-export type ExtractedJobSpec = z.infer<typeof JobSpecZod>;
-
-function heuristicFromText(text: string, verticalId: string): ExtractedJobSpec {
-  const v = loadVertical(verticalId);
-  // Start empty — do NOT seed demo ZIP/city so live runs stay location-true
-  const base = {
-    job_type: v.default_job_type,
-    job_kind: v.default_job_type,
-  } as ExtractedJobSpec;
-  const t = text.toLowerCase();
-  const raw = text || "";
-
-  const zip = raw.match(/\b(\d{5})(?:-\d{4})?\b/);
-  if (zip) base.zip = zip[1];
-
-  if (/emergency|today|asap|urgent/i.test(t)) base.urgency = "emergency_today";
-  else if (/this week|within a week/i.test(t)) base.urgency = "this_week";
-  else if (/flexible|planning/i.test(t)) base.urgency = "flexible";
-
-  if (verticalId === "hvac") {
-    const ton = raw.match(/(\d+(?:\.\d+)?)\s*-?\s*ton/i);
-    if (ton) base.tonnage = Number(ton[1]);
-    const sqft = raw.match(/(\d{3,5})\s*(?:sq\.?\s*ft|square)/i);
-    if (sqft) base.home_sqft = Number(sqft[1]);
-    if (/not cooling|no cool|warm air|compressor|won't cool/i.test(t)) {
-      base.symptom = "not_cooling";
-    } else if (/not heat|no heat|cold/i.test(t)) {
-      base.symptom = "not_heating";
-    } else if (/replace|replacement|new unit/i.test(t)) {
-      base.symptom = "full_replacement";
-    }
-    if (/central/.test(t)) base.system_type = "central_ac";
-    if (/heat\s*pump/i.test(t)) base.system_type = "heat_pump";
-    if (/mini.?split/i.test(t)) base.system_type = "mini_split";
-  }
-
-  if (verticalId === "movers") {
-    const beds = raw.match(/(\d+)\s*-?\s*bed/i);
-    if (beds) base.bedrooms = Number(beds[1]);
-    if (/studio/i.test(t)) base.move_type = "studio";
-    if (/apartment/i.test(t)) base.move_type = "local_apartment";
-    if (/house|home/i.test(t)) base.move_type = "local_house";
-    if (/pack(ing)?/i.test(t)) base.packing = "full_pack";
-    const from = raw.match(/from\s+([A-Za-z .]+?)(?:\s+to\b|,|\n)/i);
-    const to = raw.match(/\bto\s+([A-Za-z .]+?)(?:\s+zip|\s+\d{5}|,|\n|$)/i);
-    if (from) base.from_city = from[1]!.trim();
-    if (to) base.to_city = to[1]!.trim();
-  }
-
-  if (verticalId === "medical-imaging") {
-    if (/mri/i.test(t)) base.procedure = "MRI";
-    if (/brain|knee|spine|shoulder|lumbar/i.test(t)) {
-      const part = t.match(/\b(brain|knee|spine|shoulder|lumbar|ankle|hip)\b/i);
-      if (part) base.body_part = part[1]!.toLowerCase();
-    }
-    if (/with contrast/i.test(t)) base.contrast = "yes";
-    else if (/without contrast|no contrast/i.test(t)) base.contrast = "no";
-  }
-
-  if (verticalId === "auto-repair") {
-    const year = raw.match(/\b(19|20)\d{2}\b/);
-    if (year) base.vehicle_year = Number(year[0]);
-    const make = raw.match(
-      /\b(toyota|honda|ford|chevy|chevrolet|bmw|mercedes|audi|nissan|hyundai|kia|tesla|subaru)\b/i
-    );
-    if (make) base.vehicle_make = make[1]!;
-    if (/brake|rotor|pad/i.test(t)) base.symptom = "brakes";
-    else if (/check engine|cel|obd/i.test(t)) base.symptom = "check_engine";
-    else if (/ac|air.?cond/i.test(t)) base.symptom = "ac_not_cooling";
-    else if (/oil|transmission|battery|starter|alternator/i.test(t)) {
-      const s = t.match(/\b(oil|transmission|battery|starter|alternator)\b/);
-      if (s) base.symptom = s[1]!;
-    }
-  }
-
-  const cleaned = raw.replace(/\s+/g, " ").trim().slice(0, 800);
-  if (cleaned) {
-    base.notes = base.notes
-      ? `${String(base.notes)} | ${cleaned}`
-      : cleaned;
-  }
-
-  base.job_type = base.job_type || v.default_job_type;
-  base.job_kind = base.job_kind || v.default_job_type;
-
-  return JobSpecZod.parse(base);
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Primary path: multi-vertical heuristics on free text / decoded upload bytes.
- * No xAI/Grok dependency — always functional offline for judges.
- */
+function cleanText(text: string): string {
+  return text.replace(/\0/g, " ").replace(/\s+/g, " ").trim().slice(0, 20_000);
+}
+
+function numberNearKeywords(text: string, keywords: string[]): number | null {
+  for (const keyword of keywords) {
+    const k = escapeRegex(keyword);
+    const after = text.match(
+      new RegExp(`${k}[^0-9]{0,18}(\\d+(?:\\.\\d+)?)`, "i"),
+    );
+    if (after) return Number(after[1]);
+    const before = text.match(
+      new RegExp(`(\\d+(?:\\.\\d+)?)[^a-z0-9]{0,8}${k}`, "i"),
+    );
+    if (before) return Number(before[1]);
+  }
+  return null;
+}
+
+function normalizedPhrase(value: string): string {
+  return value.replaceAll("_", " ").replaceAll("-", " ").toLowerCase();
+}
+
+function enumFromText(text: string, options: string[]): string | null {
+  const lower = text.toLowerCase();
+  let best: { value: string; score: number } | null = null;
+  for (const option of options) {
+    const phrase = normalizedPhrase(option);
+    if (lower.includes(phrase)) return option;
+    const usefulTokens = phrase
+      .split(/\s+/)
+      .filter((token) => token.length >= 4 && !["with", "only"].includes(token));
+    const score = usefulTokens.filter((token) => lower.includes(token)).length;
+    if (score > 0 && (!best || score > best.score)) best = { value: option, score };
+  }
+  return best?.value ?? null;
+}
+
+function cityFromText(text: string, direction: "from" | "to"): string | null {
+  const boundary =
+    direction === "from"
+      ? /\b(?:from|origin|pickup(?:\s+in)?)\s+([A-Za-z][A-Za-z .'-]{1,45}?)(?=\s+to\b|,|\n|\d{5}|$)/i
+      : /\b(?:to|destination|dropoff(?:\s+in)?)\s+([A-Za-z][A-Za-z .'-]{1,45}?)(?=,|\n|\d{5}|$)/i;
+  return text.match(boundary)?.[1]?.trim() ?? null;
+}
+
+function stringFromText(
+  field: string,
+  text: string,
+  hints: string[],
+): string | null {
+  if (field === "zip") return text.match(/\b\d{5}(?:-\d{4})?\b/)?.[0] ?? null;
+  if (field.startsWith("from_") || field.includes("origin")) {
+    return cityFromText(text, "from");
+  }
+  if (field.startsWith("to_") || field.includes("destination")) {
+    return cityFromText(text, "to");
+  }
+  const lower = text.toLowerCase();
+  const found = hints.find((hint) => lower.includes(hint.toLowerCase()));
+  return found ?? null;
+}
+
+function booleanFromText(text: string, hints: string[]): boolean | null {
+  for (const hint of hints) {
+    const pattern = escapeRegex(hint);
+    if (new RegExp(`(?:yes|have|has|done)[^.!?]{0,20}${pattern}`, "i").test(text)) {
+      return true;
+    }
+    if (new RegExp(`(?:no|not|without)[^.!?]{0,20}${pattern}`, "i").test(text)) {
+      return false;
+    }
+  }
+  return null;
+}
+
+export type ExtractionResult = {
+  job_spec: JobSpec;
+  path: "heuristic";
+  confidence: number;
+  source_chars: number;
+  missing: JobSpecIssue[];
+  invalid: JobSpecIssue[];
+  follow_up_questions: ReturnType<typeof requiredFieldQuestions>;
+  warnings: string[];
+};
+
 export async function extractJobSpecFromUpload(input: {
   vertical: string;
   text?: string;
-  fileBase64?: string;
-  mime?: string;
   filename?: string;
-}): Promise<{ job_spec: ExtractedJobSpec; path: "heuristic" }> {
-  const vertical = input.vertical || "hvac";
+}): Promise<ExtractionResult> {
+  const vertical = loadVertical(input.vertical);
+  const text = cleanText(input.text || "");
+  const lower = text.toLowerCase();
+  const spec: JobSpec = {
+    job_type: vertical.default_job_type,
+    job_kind: vertical.default_job_type,
+  };
 
-  let text = input.text || "";
-  if (!text && input.fileBase64) {
-    try {
-      text = Buffer.from(input.fileBase64, "base64")
-        .toString("latin1")
-        .slice(0, 12000);
-    } catch {
-      /* ignore */
+  for (const question of vertical.intake.questions) {
+    const field = question.id;
+    const hints = vertical.extraction_hints[field] || [
+      field.replaceAll("_", " "),
+    ];
+    let value: unknown = null;
+
+    if (question.type === "number") {
+      value = numberNearKeywords(text, hints);
+      if (value == null && field.includes("year")) {
+        const year = text.match(/\b(?:19|20)\d{2}\b/);
+        if (year) value = Number(year[0]);
+      }
+    } else if (question.type === "enum") {
+      value = enumFromText(text, question.options || []);
+    } else if (question.type === "boolean") {
+      value = booleanFromText(text, hints);
+    } else {
+      value = stringFromText(field, text, hints);
     }
+
+    if (value != null && value !== "") spec[field] = value as JobSpec[string];
   }
-  if (!text) {
-    // Filename-only upload — still parse what we can; do NOT invent a city/ZIP
-    text = input.filename ? `document: ${input.filename}` : "";
+
+  if (text) spec.notes = text.slice(0, 2_000);
+  const validation = validateJobSpec(vertical, spec);
+  const requiredCount = vertical.intake.questions.filter((q) => q.required).length;
+  const requiredMissing = validation.missing.filter((issue) => issue.required).length;
+  const confidence = requiredCount
+    ? Math.max(0, Math.min(1, (requiredCount - requiredMissing) / requiredCount))
+    : 1;
+  const warnings: string[] = [];
+  if (!text) warnings.push("No readable text was found in the upload.");
+  if (text && lower.startsWith("%pdf") && text.length < 100) {
+    warnings.push("The PDF contained too little extractable text; it may be scanned.");
   }
-  if (!text.trim()) {
-    const v = loadVertical(vertical);
-    return {
-      job_spec: JobSpecZod.parse({
-        job_type: v.default_job_type,
-        job_kind: v.default_job_type,
-        notes: "",
-      }),
-      path: "heuristic",
-    };
-  }
+
   return {
-    job_spec: heuristicFromText(text, vertical),
+    job_spec: { ...spec, ...validation.normalized },
     path: "heuristic",
+    confidence,
+    source_chars: text.length,
+    missing: validation.missing,
+    invalid: validation.invalid,
+    follow_up_questions: requiredFieldQuestions(vertical, validation),
+    warnings,
   };
 }

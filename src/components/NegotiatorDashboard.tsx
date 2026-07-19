@@ -47,7 +47,7 @@ export function NegotiatorDashboard() {
   const switchVertical = (id: string) => {
     const url = new URL(window.location.href);
     url.searchParams.set("vertical", id);
-    window.location.href = url.toString();
+    window.location.assign(url.toString());
   };
 
   const [vertical, setVertical] = useState<VerticalConfig | null>(null);
@@ -197,12 +197,15 @@ export function NegotiatorDashboard() {
   // Load vertical config
   useEffect(() => {
     let cancelled = false;
-    setLoadError(null);
-    setVertical(null);
-    setState(null);
-    setShowDiscovery(false);
-    setBanner(null);
-    setBusy(false);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoadError(null);
+      setVertical(null);
+      setState(null);
+      setShowDiscovery(false);
+      setBanner(null);
+      setBusy(false);
+    });
     replayStarted.current = false;
     streamRef.current?.stop();
     stopPolling();
@@ -274,15 +277,7 @@ export function NegotiatorDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [
-    vertical,
-    replay,
-    replayLive,
-    startMock,
-    state?.phase,
-    // Only gate on "has any job_spec keys" so object identity churn doesn't re-fire
-    state?.job_spec ? 1 : 0,
-  ]);
+  }, [vertical, replay, replayLive, startMock, state]);
 
   const onJobSpecChange = useCallback((spec: JobSpec) => {
     setState((prev) =>
@@ -387,8 +382,15 @@ export function NegotiatorDashboard() {
 
       const confirmRes = await fetch(`/api/jobs/${jobId}/confirm`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmed: true, job_spec: state.job_spec }),
       });
-      if (!confirmRes.ok) throw new Error("Could not confirm job");
+      if (!confirmRes.ok) {
+        const problem = (await confirmRes.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(problem.error || "Could not confirm job");
+      }
 
       setState((prev) =>
         prev
@@ -411,9 +413,9 @@ export function NegotiatorDashboard() {
       );
       startMock(vertical, state.job_spec);
     }
-  }, [vertical, state?.job_spec, replay, startMock, stopPolling]);
+  }, [vertical, state, replay, startMock, stopPolling]);
 
-  const onListen = useCallback((vendor_id: string, ts: number) => {
+  const onListen = (vendor_id: string, ts: number) => {
     setHighlight({ vendor_id, ts });
     requestAnimationFrame(() => {
       document.getElementById(`ts-${ts}`)?.scrollIntoView({
@@ -422,7 +424,7 @@ export function NegotiatorDashboard() {
       });
     });
     setTimeout(() => setHighlight(null), 2500);
-  }, []);
+  };
 
   if (loadError) {
     return (

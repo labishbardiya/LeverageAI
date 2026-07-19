@@ -17,7 +17,6 @@ import type { BridgePairIntent } from "./types";
 import { getElevenLabsApiKey } from "./env";
 import { getStore } from "@/lib/db";
 import { publish } from "@/lib/db/events";
-import { logQuote } from "@/lib/tools/logQuote";
 import { closeSession } from "@/lib/tools/closeSession";
 
 const WATCHDOG_MS = 90_000;
@@ -99,17 +98,30 @@ function sendInit(
   intent: BridgePairIntent,
   role: "negotiator" | "counter"
 ) {
+  const common = {
+    job_id: intent.jobId,
+    session_id: intent.sessionId,
+    company_key: intent.companyKey,
+    company_name: intent.companyName,
+    job_spec_json: intent.jobSpecJson,
+    bridge_role: role,
+    vertical: intent.vertical || "",
+    vertical_name: intent.verticalName || intent.vertical || "service",
+    quote_line_items_json: intent.quoteLineItemsJson,
+  };
   sendJson(ws, {
     type: "conversation_initiation_client_data",
-    dynamic_variables: {
-      job_id: intent.jobId,
-      session_id: intent.sessionId,
-      company_key: intent.companyKey,
-      job_spec_json: intent.jobSpecJson,
-      bridge_role: role,
-      playbook: intent.playbookHint || "",
-      vertical: intent.vertical || "",
-    },
+    dynamic_variables:
+      role === "negotiator"
+        ? {
+            ...common,
+            playbook: intent.playbookHint || "",
+            negotiation_levers_json: intent.negotiationLeversJson,
+          }
+        : {
+            ...common,
+            counter_strategy: intent.counterStrategy,
+          },
   });
 }
 
@@ -190,22 +202,12 @@ function buildKickoff(intent: BridgePairIntent): string {
   } catch {
     /* ignore */
   }
-  const vertical =
-    typeof job.vertical === "string"
-      ? job.vertical
-      : intent.vertical || "hvac";
-  const verticalHint =
-    vertical === "movers"
-      ? "This is a local moving quote. Ask for labor+truck total and access fees."
-      : vertical === "medical-imaging"
-        ? "This is a cash-pay MRI/imaging price. Ask for cash total with/without contrast."
-        : vertical === "auto-repair"
-          ? "This is an auto repair quote. Ask for diagnosis + parts/labor total."
-          : "This is an HVAC install/repair quote. Ask for itemized installed total.";
+  const vertical = intent.vertical || "service";
 
   const parts = [
     "You are on a live call with a vendor dispatcher. Sound like a calm buying consultant.",
-    `Vertical: ${vertical}. ${verticalHint}`,
+    `Vertical: ${intent.verticalName || vertical}.`,
+    `Required quote categories: ${intent.quoteLineItemsJson}.`,
     `Company key: ${intent.companyKey}.`,
     "RULES: One idea per turn (1–3 short sentences). Always answer them. Never send only '…' or partial words. Never re-greet after the call has started. Never speak tool names.",
     "Open once: AI disclosure + job from JSON (use their real city/ZIP) + ask for itemized total. Then listen.",
@@ -216,20 +218,6 @@ function buildKickoff(intent: BridgePairIntent): string {
     parts.push(`Playbook (soft tactics only; never invent $): ${intent.playbookHint}`);
   }
   return parts.join(" ");
-}
-
-/** Pull dollar amounts from spoken text for best-effort outcomes. */
-export function parsePricesFromText(text: string): number[] {
-  const out: number[] = [];
-  const re =
-    /\$\s*([\d,]+(?:\.\d{1,2})?)|([\d,]+(?:\.\d{1,2})?)\s*(?:dollars?)/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const raw = (m[1] || m[2] || "").replace(/,/g, "");
-    const n = Number(raw);
-    if (Number.isFinite(n) && n >= 50 && n <= 500_000) out.push(Math.round(n));
-  }
-  return out;
 }
 
 function detectCallbackLanguage(text: string): string | null {
@@ -246,12 +234,6 @@ function detectCallbackLanguage(text: string): string | null {
   return null;
 }
 
-function detectFirmCloseSignal(text: string): boolean {
-  return /final (price|number|total)|that's (our |the )?best|locked (in )?at|written (quote|number)|itemized total|all-?in (at|for)/i.test(
-    text
-  );
-}
-
 export async function runAgentBridge(
   intent: BridgePairIntent
 ): Promise<BridgeResult> {
@@ -261,7 +243,6 @@ export async function runAgentBridge(
   let lastEvent = Date.now();
   let closed = false;
   let turns = 0;
-  let closingInProgress = false;
   /** Single shared close chain — serverless must await this before return */
   let closePromise: Promise<void> | null = null;
 
@@ -315,7 +296,6 @@ export async function runAgentBridge(
   const forceClose = (reason: string): Promise<void> => {
     // Single closePromise chain — concurrent callers share one write
     if (closePromise) return closePromise;
-    closingInProgress = true;
     closePromise = (async () => {
       clearPending("negotiator");
       clearPending("counter");
@@ -332,61 +312,12 @@ export async function runAgentBridge(
           const sessionQuotes = quotes
             .filter((q) => q.session_id === intent.sessionId)
             .sort((a, b) => a.created_at.localeCompare(b.created_at));
-          const quoteTotals = sessionQuotes
-            .map((q) => q.total)
-            .filter((n): n is number => typeof n === "number" && n > 0);
-          const vendorPrices = parsePricesFromText(vendorText);
-          const anyPrices = parsePricesFromText(allText);
-          const firmSignal =
-            detectFirmCloseSignal(allText) ||
-            detectFirmCloseSignal(vendorText);
           const hasLoggedQuotes = sessionQuotes.length > 0;
 
-          // Only treat as itemized quote when we already logged quotes OR
-          // firm close language + a clear grand total (never invent from random $)
-          let grandTotal: number | null = null;
-          if (hasLoggedQuotes) {
-            grandTotal = quoteTotals[quoteTotals.length - 1] ?? null;
-          } else if (firmSignal) {
-            // Prefer last largest vendor total with firm language
-            const prices =
-              vendorPrices.length > 0 ? vendorPrices : anyPrices;
-            if (prices.length > 0) {
-              const last = prices[prices.length - 1]!;
-              const largest = Math.max(...prices);
-              grandTotal =
-                last >= largest * 0.85 ? last : largest;
-            }
-          }
-
           const callback = detectCallbackLanguage(vendorText || allText);
-          const canItemize =
-            intent.companyKey !== "stonewaller" &&
-            grandTotal != null &&
-            (hasLoggedQuotes || firmSignal);
+          const canItemize = intent.companyKey !== "stonewaller" && hasLoggedQuotes;
 
-          if (canItemize && grandTotal != null) {
-            if (!hasLoggedQuotes) {
-              try {
-                await logQuote({
-                  job_id: intent.jobId,
-                  session_id: intent.sessionId,
-                  company_key: intent.companyKey,
-                  company_name: session.vendor_name,
-                  currency: "USD",
-                  line_items: [
-                    {
-                      label: "Phone total (firm close)",
-                      amount: grandTotal,
-                    },
-                  ],
-                  grand_total: grandTotal,
-                  notes: `auto from firm total on ${reason}`,
-                });
-              } catch (e) {
-                console.warn("[bridge] best-effort log_quote", e);
-              }
-            }
+          if (canItemize) {
             const res = await closeSession({
               session_id: intent.sessionId,
               job_id: intent.jobId,
@@ -394,11 +325,14 @@ export async function runAgentBridge(
               summary: reason,
             });
             if (!res.ok) {
-              await store.closeSession(
-                intent.sessionId,
-                "documented_decline",
-                `${reason}; close failed: ${res.error}`
-              );
+              // A spoken or one-line total is not upgraded into an itemized
+              // quote. Preserve the transcript and fail honestly.
+              await closeSession({
+                session_id: intent.sessionId,
+                job_id: intent.jobId,
+                outcome_type: "documented_decline",
+                callback_window: `${reason}; incomplete quote: ${res.error}`,
+              });
             }
           } else if (callback || intent.companyKey === "stonewaller") {
             const res = await closeSession({
@@ -411,19 +345,23 @@ export async function runAgentBridge(
               summary: reason,
             });
             if (!res.ok) {
-              await store.closeSession(
-                intent.sessionId,
-                "documented_decline",
-                reason
-              );
+              await closeSession({
+                session_id: intent.sessionId,
+                job_id: intent.jobId,
+                outcome_type: "documented_decline",
+                callback_window: reason,
+              });
             }
           } else {
             // No firm total → never invent itemized_quote from stray $
-            await store.closeSession(
-              intent.sessionId,
-              callback ? "callback_commitment" : "documented_decline",
-              reason
-            );
+            await closeSession({
+              session_id: intent.sessionId,
+              job_id: intent.jobId,
+              outcome_type: callback
+                ? "callback_commitment"
+                : "documented_decline",
+              callback_window: reason,
+            });
           }
 
           publish({

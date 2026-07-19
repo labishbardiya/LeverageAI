@@ -5,7 +5,11 @@
  */
 import { getStore } from "@/lib/db";
 import { publish } from "@/lib/db/events";
-import { loadVertical } from "@/lib/config/loadVertical";
+import {
+  getBenchmarkMid,
+  loadVertical,
+  type VerticalConfig,
+} from "@/lib/config/loadVertical";
 import { logQuote } from "@/lib/tools/logQuote";
 import { closeSession } from "@/lib/tools/closeSession";
 import { recordToolCall } from "@/lib/tools/recordToolCall";
@@ -16,17 +20,38 @@ function sleep(ms: number) {
 }
 
 /** Line items that sum exactly to `total` (log_quote honesty gate). */
-function lineItems(
+function configuredLineItems(
   total: number,
-  parts: { label: string; weight: number }[]
+  vertical: VerticalConfig,
+  options?: { complete?: boolean }
 ): { label: string; amount: number }[] {
-  if (parts.length === 0) {
-    return [{ label: "Total", amount: total }];
+  const required = vertical.quote_line_items.filter((item) => item.required);
+  const optional = vertical.quote_line_items.filter((item) => !item.required);
+  const selected = options?.complete === false
+    ? vertical.quote_line_items.slice(0, 1)
+    : [...required, ...optional.slice(0, Math.max(0, 3 - required.length))];
+  while (selected.length < 2 && optional[selected.length - required.length]) {
+    selected.push(optional[selected.length - required.length]!);
   }
-  const amounts = parts.map((p) => Math.round(total * p.weight));
+  if (selected.length === 0) {
+    throw new Error(`Vertical ${vertical.id} has no configured quote categories`);
+  }
+  const rawWeights = selected.map((_, index) => selected.length - index);
+  const weightTotal = rawWeights.reduce((sum, weight) => sum + weight, 0);
+  const amounts = rawWeights.map((weight) => Math.round((total * weight) / weightTotal));
   const head = amounts.slice(0, -1).reduce((a, b) => a + b, 0);
   amounts[amounts.length - 1] = total - head;
-  return parts.map((p, i) => ({ label: p.label, amount: amounts[i]! }));
+  return selected.map((item, index) => ({
+    label: item.label,
+    amount: amounts[index]!,
+  }));
+}
+
+function itemizationRequest(vertical: VerticalConfig): string {
+  return vertical.quote_line_items
+    .slice(0, 5)
+    .map((item) => item.label)
+    .join(", ");
 }
 
 /** Relative ms from track start — UI shows 0:01, 0:02 not wall-clock junk. */
@@ -93,7 +118,8 @@ async function runToughTrack(
   jobId: string,
   tough: Session,
   mid: number,
-  getCompetingTotal: () => number | null
+  getCompetingTotal: () => number | null,
+  vertical: VerticalConfig,
 ): Promise<void> {
   const toughOpen = Math.round(mid * 1.22);
   await sleep(200);
@@ -101,7 +127,7 @@ async function runToughTrack(
     tough.id,
     jobId,
     "negotiator",
-    "Hi — I'm an AI assistant calling for a homeowner about a confirmed job. Can I get an itemized installed quote?",
+    `Hi - I'm an AI assistant calling for a customer about a confirmed ${vertical.displayName} request. Can I get an itemized quote covering ${itemizationRequest(vertical)}?`,
     1000
   );
   await sleep(700);
@@ -118,11 +144,7 @@ async function runToughTrack(
     company_key: tough.vendor_id,
     company_name: tough.vendor_name,
     currency: "USD",
-    line_items: lineItems(toughOpen, [
-      { label: "Equipment package", weight: 0.52 },
-      { label: "Labor & install", weight: 0.34 },
-      { label: "Permit & haul-away", weight: 0.14 },
-    ]),
+    line_items: configuredLineItems(toughOpen, vertical),
     grand_total: toughOpen,
   });
 
@@ -184,11 +206,7 @@ async function runToughTrack(
     company_key: tough.vendor_id,
     company_name: tough.vendor_name,
     currency: "USD",
-    line_items: lineItems(toughFinal, [
-      { label: "Equipment package", weight: 0.58 },
-      { label: "Labor & install", weight: 0.32 },
-      { label: "Permit & haul-away", weight: 0.1 },
-    ]),
+    line_items: configuredLineItems(toughFinal, vertical),
     grand_total: toughFinal,
   });
   const closeTough = await closeSession({
@@ -203,14 +221,15 @@ async function runUpsellTrack(
   jobId: string,
   upsell: Session,
   mid: number,
-  setCompetingTotal: (n: number) => void
+  setCompetingTotal: (n: number) => void,
+  vertical: VerticalConfig,
 ): Promise<number> {
   await sleep(150);
   await say(
     upsell.id,
     jobId,
     "negotiator",
-    "Calling for an itemized quote on the same confirmed job — please break out fees.",
+    `Calling for an itemized quote on the same confirmed request - please break out ${itemizationRequest(vertical)}.`,
     1500
   );
   await sleep(550);
@@ -219,7 +238,7 @@ async function runUpsellTrack(
     upsell.id,
     jobId,
     "vendor",
-    `${upsell.vendor_name} — we can do equipment around $${upsellTeaser} to start.`,
+    `${upsell.vendor_name} - the advertised base starts around $${upsellTeaser}.`,
     2500
   );
   await mustLogQuote({
@@ -228,9 +247,7 @@ async function runUpsellTrack(
     company_key: upsell.vendor_id,
     company_name: upsell.vendor_name,
     currency: "USD",
-    line_items: lineItems(upsellTeaser, [
-      { label: "Base equipment (advertised)", weight: 1 },
-    ]),
+    line_items: configuredLineItems(upsellTeaser, vertical, { complete: false }),
     grand_total: upsellTeaser,
   });
   await sleep(400);
@@ -238,7 +255,7 @@ async function runUpsellTrack(
     upsell.id,
     jobId,
     "negotiator",
-    "Please itemize permit, haul-away, refrigerant, and diagnostic as well.",
+    `That is not complete. Please itemize every configured category: ${itemizationRequest(vertical)}.`,
     3500
   );
   await sleep(600);
@@ -248,7 +265,7 @@ async function runUpsellTrack(
     upsell.id,
     jobId,
     "vendor",
-    `Fine — plus permit, haul-away, refrigerant, diagnostic. Call it $${upsellTotal} total.`,
+    `Fine - with every disclosed category included, call it $${upsellTotal} total.`,
     4500
   );
   await mustLogQuote({
@@ -257,13 +274,7 @@ async function runUpsellTrack(
     company_key: upsell.vendor_id,
     company_name: upsell.vendor_name,
     currency: "USD",
-    line_items: lineItems(upsellTotal, [
-      { label: "Base equipment (advertised)", weight: 0.67 },
-      { label: "Permit fee", weight: 0.08 },
-      { label: "Haul-away", weight: 0.07 },
-      { label: "Refrigerant", weight: 0.1 },
-      { label: "Diagnostic", weight: 0.08 },
-    ]),
+    line_items: configuredLineItems(upsellTotal, vertical),
     grand_total: upsellTotal,
   });
   await recordToolCall({
@@ -281,13 +292,17 @@ async function runUpsellTrack(
 }
 
 /** Parallel track: stonewaller (decline). */
-async function runStoneTrack(jobId: string, stone: Session): Promise<void> {
+async function runStoneTrack(
+  jobId: string,
+  stone: Session,
+  vertical: VerticalConfig,
+): Promise<void> {
   await sleep(180);
   await say(
     stone.id,
     jobId,
     "negotiator",
-    "Can you provide an itemized phone quote for the same confirmed job?",
+    `Can you provide an itemized quote for the confirmed ${vertical.displayName} request, including ${itemizationRequest(vertical)}?`,
     2000
   );
   await sleep(500);
@@ -370,10 +385,16 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     return;
   }
 
-  const mid =
-    vertical.benchmarks[vertical.default_job_type || ""]?.mid ??
-    vertical.benchmarks[Object.keys(vertical.benchmarks)[0]!]?.mid ??
-    7500;
+  const jobType =
+    typeof job.job_spec.job_type === "string"
+      ? job.job_spec.job_type
+      : typeof job.job_spec.job_kind === "string"
+        ? job.job_spec.job_kind
+        : vertical.default_job_type;
+  const mid = getBenchmarkMid(vertical, jobType);
+  if (mid == null) {
+    throw new Error(`No benchmark configured for ${vertical.id}/${jobType || "default"}`);
+  }
 
   // Only re-dial tracks that still need work (don't reopen closed sessions)
   const openSessions = sessions.filter((s) => s.outcome_type == null);
@@ -409,13 +430,13 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
 
   const tasks: Promise<unknown>[] = [];
   if (tough.outcome_type == null) {
-    tasks.push(runToughTrack(jobId, tough, mid, getCompetingTotal));
+    tasks.push(runToughTrack(jobId, tough, mid, getCompetingTotal, vertical));
   }
   if (upsell.outcome_type == null) {
-    tasks.push(runUpsellTrack(jobId, upsell, mid, setCompetingTotal));
+    tasks.push(runUpsellTrack(jobId, upsell, mid, setCompetingTotal, vertical));
   }
   if (stone.outcome_type == null) {
-    tasks.push(runStoneTrack(jobId, stone));
+    tasks.push(runStoneTrack(jobId, stone, vertical));
   }
   await Promise.all(tasks);
 

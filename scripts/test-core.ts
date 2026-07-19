@@ -1,0 +1,143 @@
+import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
+import JSZip from "jszip";
+import { listVerticalIds, loadVertical } from "../src/lib/config/loadVertical";
+import { extractJobSpecFromUpload } from "../src/lib/intake/extractJobSpec";
+import { validateJobSpec } from "../src/lib/intake/jobSpec";
+import { questionsBeforeBooking } from "../src/lib/review/booking";
+import { assessQuoteCompleteness } from "../src/lib/review/quoteEvidence";
+import { verifyElevenLabsWebhook } from "../src/lib/security/elevenlabsWebhook";
+import { extractLearningsFromSession } from "../src/lib/learning/extract";
+import { buildEvidenceBundle } from "../src/lib/evidence/bundle";
+
+async function main() {
+  const ids = listVerticalIds();
+  assert.deepEqual(ids, ["auto-repair", "hvac", "medical-imaging", "movers"]);
+  for (const id of ids) {
+    const vertical = loadVertical(id);
+    assert.equal(vertical.vendors.length, 3);
+    assert.ok(vertical.quote_line_items.some((item) => item.required));
+    assert.ok(vertical.booking_terms.length > 0);
+    assert.ok(vertical.provider_search_queries.length > 0);
+  }
+
+  const extraction = await extractJobSpecFromUpload({
+    vertical: "hvac",
+    text: "My central AC stopped cooling in ZIP 60614 and I need it this week.",
+  });
+  assert.equal(extraction.job_spec.zip, "60614");
+  assert.equal(extraction.job_spec.system_type, "central_ac");
+  assert.equal(extraction.job_spec.tonnage, undefined, "must not invent tonnage");
+  assert.equal(validateJobSpec("hvac", extraction.job_spec).ok, true);
+
+  const hvac = loadVertical("hvac");
+  const complete = assessQuoteCompleteness(hvac, [
+    { label: "Equipment", amount: 5000 },
+    { label: "Labor and installation", amount: 2500 },
+  ]);
+  assert.equal(complete.itemized, true);
+  assert.deepEqual(complete.missing_required, []);
+
+  const bookingQuestions = questionsBeforeBooking({
+    vertical: hvac,
+    quote: {
+      id: "q1",
+      session_id: "s1",
+      job_id: "j1",
+      vendor_id: "tough",
+      line_items: [
+        { label: "Equipment", amount: 5000 },
+        { label: "Labor and installation", amount: 2500 },
+      ],
+      total: 7500,
+      red_flag: false,
+      notes: null,
+      created_at: new Date(0).toISOString(),
+    },
+    transcripts: [],
+  });
+  assert.ok(bookingQuestions.length > 0, "missing booking terms must become questions");
+
+  const body = JSON.stringify({ type: "post_call_transcription", data: {} });
+  const secret = "test-secret";
+  const timestamp = 1_700_000_000;
+  const digest = createHmac("sha256", secret)
+    .update(`${timestamp}.${body}`)
+    .digest("hex");
+  assert.deepEqual(
+    verifyElevenLabsWebhook({
+      rawBody: body,
+      signatureHeader: `t=${timestamp},v0=${digest}`,
+      secret,
+      nowMs: timestamp * 1000,
+    }),
+    { ok: true },
+  );
+  assert.equal(
+    verifyElevenLabsWebhook({
+      rawBody: `${body} `,
+      signatureHeader: `t=${timestamp},v0=${digest}`,
+      secret,
+      nowMs: timestamp * 1000,
+    }).ok,
+    false,
+  );
+
+  const learnings = await extractLearningsFromSession({
+    vertical: "hvac",
+    transcripts: [
+      { speaker: "negotiator", text: "Please itemize every line item.", ts_ms: 1_000 },
+      { speaker: "negotiator", text: "I have a competing quote in writing.", ts_ms: 2_000 },
+    ],
+    priceHistory: [10_000, 9_000],
+  });
+  assert.equal(learnings.length, 2);
+  assert.equal(learnings.find((item) => item.tactic === "cite_competing_bid")?.delta, -10);
+  assert.equal(learnings.find((item) => item.tactic === "request_itemization")?.delta, 0);
+
+  const createdAt = new Date(0).toISOString();
+  const bundle = await buildEvidenceBundle({
+    generated_at: createdAt,
+    vertical_name: "HVAC",
+    app_origin: "https://example.test",
+    job: {
+      id: "j1",
+      vertical: "hvac",
+      job_spec: extraction.job_spec,
+      frozen_job_spec: extraction.job_spec,
+      status: "complete",
+      confirmed: true,
+      created_at: createdAt,
+    },
+    sessions: [],
+    quotes: [],
+    ranked: [],
+    transcripts: [],
+    tool_calls: [],
+    questions_before_booking: bookingQuestions,
+    booking_request_draft: "Evidence request only. No purchase authorization.",
+    learning: [],
+  });
+  const zip = await JSZip.loadAsync(bundle);
+  for (const filename of [
+    "report.pdf",
+    "quotes.json",
+    "transcripts.json",
+    "transcripts.md",
+    "recordings.json",
+    "learning-comparison.json",
+    "booking-request.txt",
+    "manifest.json",
+  ]) {
+    assert.ok(zip.file(filename), `bundle is missing ${filename}`);
+  }
+  const pdf = await zip.file("report.pdf")!.async("uint8array");
+  assert.equal(new TextDecoder().decode(pdf.slice(0, 4)), "%PDF");
+
+  console.log("CORE TESTS OK");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

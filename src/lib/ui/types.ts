@@ -177,6 +177,14 @@ export type JobState = {
   sessions: SessionCard[];
   ranked: RankedDeal[];
   deal_review?: DealReviewUi | null;
+  questions_before_booking?: Array<{
+    id: string;
+    label: string;
+    question: string;
+    required: boolean;
+    reason: string;
+  }>;
+  booking_request_draft?: string;
 };
 
 export type MockEvent =

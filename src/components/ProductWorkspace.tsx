@@ -127,22 +127,22 @@ function naturesFromVertical(v: VerticalConfig | null): AgentNature[] {
     return [
       {
         id: "tough",
-        name: "Summit",
-        oneWord: "Summit",
+        name: "ProviderA",
+        oneWord: "ProviderA",
         nature4: "Quality over lowest price",
         role: "tough",
       },
       {
         id: "stonewaller",
-        name: "ComfortPro",
-        oneWord: "ComfortPro",
+        name: "ProviderB",
+        oneWord: "ProviderB",
         nature4: "Visit before firm quote",
         role: "stonewaller",
       },
       {
         id: "upseller",
-        name: "ValueHVAC",
-        oneWord: "ValueHVAC",
+        name: "ProviderC",
+        oneWord: "ProviderC",
         nature4: "Low price watch fees",
         role: "upseller",
       },
@@ -306,12 +306,16 @@ function WaChat({
   lines,
   status,
   total,
+  audioUrl,
+  sessionId,
 }: {
   oneWord: string;
   nature4: string;
   lines: TranscriptLine[];
   status: string;
   total: number | null;
+  audioUrl?: string | null;
+  sessionId?: string;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -363,6 +367,7 @@ function WaChat({
           return (
             <div
               key={line.id}
+              id={sessionId ? `transcript-${sessionId}-${Math.round(line.ts)}` : undefined}
               className={`flex wa-pop ${out ? "justify-end" : "justify-start"}`}
             >
               <div className={out ? "wa-bubble-out" : "wa-bubble-in"}>
@@ -380,11 +385,46 @@ function WaChat({
         })}
         <div ref={bottomRef} />
       </div>
-      {total != null && (
-        <div className="wa-footer">Latest total: {formatUsd(total)}</div>
+      {(total != null || audioUrl) && (
+        <div className="wa-footer flex flex-wrap items-center gap-2">
+          {total != null && <span>Latest total: {formatUsd(total)}</span>}
+          {audioUrl && (
+            <audio
+              className="ml-auto h-7 max-w-[155px]"
+              controls
+              preload="none"
+              src={audioUrl}
+              aria-label={`${oneWord} call recording`}
+            />
+          )}
+        </div>
       )}
     </div>
   );
+}
+
+type PendingJob = {
+  id: string;
+  spec: JobSpec;
+};
+
+type RecentRun = {
+  job_id: string;
+  vertical: ModeId;
+  created_at: string;
+  status: "review" | "running" | "complete";
+  summary: string;
+};
+
+const RECENT_RUNS_KEY = "leverageai:anonymous-recent-runs:v1";
+
+function readRecentRuns(): RecentRun[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENT_RUNS_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+  } catch {
+    return [];
+  }
 }
 
 export function ProductWorkspace() {
@@ -401,8 +441,6 @@ export function ProductWorkspace() {
   const [stage, setStage] = useState<"compose" | "working" | "done">("compose");
   const [talkOpen, setTalkOpen] = useState(false);
   const [intakeId, setIntakeId] = useState<string | null>(null);
-  const [talkUrl, setTalkUrl] = useState<string | null>(null);
-  const [liveAvailable, setLiveAvailable] = useState(false);
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [discoveryZip, setDiscoveryZip] = useState("");
   const [discoveryLocation, setDiscoveryLocation] = useState("");
@@ -412,6 +450,12 @@ export function ProductWorkspace() {
   } | null>(null);
   const [twDisplay, setTwDisplay] = useState("");
   const [focused, setFocused] = useState(false);
+  const [pendingJob, setPendingJob] = useState<PendingJob | null>(null);
+  const [fieldIssues, setFieldIssues] = useState<Record<string, string>>({});
+  const [recentRuns, setRecentRuns] = useState<RecentRun[]>(() =>
+    typeof window === "undefined" ? [] : readRecentRuns(),
+  );
+  const [copiedDraft, setCopiedDraft] = useState(false);
 
   const chatsRef = useRef<HTMLDivElement>(null);
   const dealRef = useRef<HTMLDivElement>(null);
@@ -423,10 +467,23 @@ export function ProductWorkspace() {
   const modeMeta = MODES.find((m) => m.id === mode) || MODES[0];
   const natures = useMemo(() => naturesFromVertical(vertical), [vertical]);
 
+  const rememberRun = useCallback((run: RecentRun) => {
+    setRecentRuns((previous) => {
+      const existing = previous.find((item) => item.job_id === run.job_id);
+      const stableRun = existing
+        ? { ...run, created_at: existing.created_at }
+        : run;
+      const next = [stableRun, ...previous.filter((item) => item.job_id !== run.job_id)]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, 5);
+      localStorage.setItem(RECENT_RUNS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   // Typewriter placeholders (3–4 lines, hold ~2.5s)
   useEffect(() => {
     if (focused || prompt.trim()) {
-      setTwDisplay("");
       return;
     }
     const lines = modeMeta.typewriters;
@@ -500,13 +557,6 @@ export function ProductWorkspace() {
   }, [mode]);
 
   useEffect(() => {
-    fetch("/api/sessions/start", { method: "OPTIONS" }).catch(() => null);
-    setLiveAvailable(
-      Boolean(process.env.NEXT_PUBLIC_ELEVENLABS_INTAKE_AGENT_ID),
-    );
-  }, []);
-
-  useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!modeRef.current?.contains(e.target as Node)) setModeOpen(false);
     };
@@ -574,6 +624,15 @@ export function ProductWorkspace() {
             if (next.phase !== "complete") {
               setState({ ...next, phase: "complete" });
             }
+            rememberRun({
+              job_id: capturedJobId,
+              vertical: cfg.id as ModeId,
+              created_at: new Date().toISOString(),
+              status: "complete",
+              summary:
+                next.deal_review?.headline ||
+                `${cfg.displayName || cfg.label || cfg.id} negotiation`,
+            });
             requestAnimationFrame(() => {
               dealRef.current?.scrollIntoView({
                 behavior: "smooth",
@@ -594,11 +653,11 @@ export function ProductWorkspace() {
       void tick();
       pollRef.current = setInterval(() => void tick(), 800);
     },
-    [stopPoll],
+    [rememberRun, stopPoll],
   );
 
-  const beginNegotiations = useCallback(
-    async (jobId: string, jobSpec: JobSpec, cfg: VerticalConfig) => {
+  const discoverProviders = useCallback(
+    async (jobSpec: JobSpec, cfg: VerticalConfig): Promise<JobSpec> => {
       const locText = [
         jobSpec.zip,
         jobSpec.from_city,
@@ -612,8 +671,7 @@ export function ProductWorkspace() {
 
       setShowDiscovery(true);
       setStatusStep("match");
-      setStatus("Finding real shops near your job…");
-      setStage("working");
+      setStatus("Building the real-world provider shortlist…");
 
       let zip = jobSpec.zip ? String(jobSpec.zip) : "";
       let locationLabel = locText;
@@ -644,22 +702,28 @@ export function ProductWorkspace() {
           const err = await discRes.json().catch(() => ({}));
           if ((err as { code?: string }).code === "LOCATION_REQUIRED") {
             throw new Error(
-              "Add a city or ZIP so we can find real shops near you.",
+              "Add a city or ZIP so we can build a real provider shortlist.",
             );
           }
+          throw new Error(
+            (err as { error?: string }).error || "Provider discovery failed",
+          );
         }
       } catch (e) {
-        if (e instanceof Error && e.message.includes("city or ZIP")) throw e;
-        /* discovery soft-fail — still negotiate */
+        if (e instanceof Error) throw e;
+        throw new Error("Provider discovery failed");
       }
 
       setDiscoveryZip(zip);
       setDiscoveryLocation(locationLabel);
+      return zip && !jobSpec.zip ? { ...jobSpec, zip } : jobSpec;
+    },
+    [prompt],
+  );
 
-      // Persist resolved location onto job_spec for agents
-      if (zip && !jobSpec.zip) {
-        jobSpec = { ...jobSpec, zip };
-      }
+  const beginNegotiations = useCallback(
+    async (jobId: string, jobSpec: JobSpec, cfg: VerticalConfig) => {
+      setStage("working");
 
       setStatusStep("connect");
       setStatus("Multi-agent mode · connecting…");
@@ -700,52 +764,16 @@ export function ProductWorkspace() {
           ? "Multi-agent mode · live"
           : "Multi-agent mode · running",
       );
+      rememberRun({
+        job_id: jobId,
+        vertical: cfg.id as ModeId,
+        created_at: new Date().toISOString(),
+        status: "running",
+        summary: `${cfg.displayName || cfg.label || cfg.id} negotiation`,
+      });
       startPolling(jobId, cfg);
     },
-    [startPolling, prompt],
-  );
-
-  const runPipeline = useCallback(
-    async (jobSpec: JobSpec) => {
-      if (!vertical) return;
-      stopPoll();
-      setBusy(true);
-      setError(null);
-      setStage("working");
-      setStatus("Confirming your job…");
-      setStatusStep("match");
-
-      try {
-        const createRes = await fetch("/api/jobs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vertical: vertical.id, job_spec: jobSpec }),
-        });
-        if (!createRes.ok) throw new Error("Could not create job");
-        const created = (await createRes.json()) as {
-          job?: { id: string };
-          id?: string;
-          job_id?: string;
-        };
-        const jobId = created.job?.id || created.job_id || created.id;
-        if (!jobId) throw new Error("No job id");
-
-        const confirmRes = await fetch(`/api/jobs/${jobId}/confirm`, {
-          method: "PATCH",
-        });
-        if (!confirmRes.ok) throw new Error("Could not confirm job");
-
-        await beginNegotiations(jobId, jobSpec, vertical);
-      } catch (e) {
-        setBusy(false);
-        setStage("compose");
-        setError(e instanceof Error ? e.message : "Something went wrong");
-        setStatus(null);
-        setStatusStep(null);
-        setShowDiscovery(false);
-      }
-    },
-    [vertical, beginNegotiations, stopPoll],
+    [rememberRun, startPolling],
   );
 
   const onSend = async (e?: FormEvent) => {
@@ -754,7 +782,7 @@ export function ProductWorkspace() {
     stopPoll();
     setError(null);
 
-    let jobSpec: JobSpec = {
+    const initialSpec: JobSpec = {
       job_type: vertical.default_job_type || "job",
       job_kind: vertical.default_job_type || "job",
     };
@@ -764,98 +792,150 @@ export function ProductWorkspace() {
       setStatus("Reading your request…");
       setStatusStep("match");
 
-      if (file) {
-        const createRes = await fetch("/api/jobs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            vertical: vertical.id,
-            job_spec: jobSpec,
-          }),
-        });
-        if (!createRes.ok) throw new Error("Could not prepare upload");
-        const created = (await createRes.json()) as {
-          job?: { id: string };
-          id?: string;
-        };
-        const jobId = created.job?.id || created.id;
-        if (!jobId) throw new Error("No job id");
-
-        const form = new FormData();
-        form.append("file", file);
-        if (prompt.trim()) form.append("text", prompt.trim());
-        const extractRes = await fetch(`/api/jobs/${jobId}/extract-pdf`, {
-          method: "POST",
-          body: form,
-        });
-        if (!extractRes.ok) throw new Error("Could not read the document");
-        const extracted = (await extractRes.json()) as {
-          job?: { job_spec?: JobSpec };
-        };
-        jobSpec = {
-          ...jobSpec,
-          ...(extracted.job?.job_spec || {}),
-        };
-        const confirmRes = await fetch(`/api/jobs/${jobId}/confirm`, {
-          method: "PATCH",
-        });
-        if (!confirmRes.ok) throw new Error("Could not confirm job");
-        await beginNegotiations(jobId, jobSpec, vertical);
-        setFile(null);
+      if (!file && !prompt.trim()) {
+        setBusy(false);
+        setError(
+          "Describe the job and where it is (city or ZIP), then press Send.",
+        );
+        setStatus(null);
+        setStatusStep(null);
         return;
       }
 
-      if (prompt.trim()) {
-        const createRes = await fetch("/api/jobs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            vertical: vertical.id,
-            job_spec: jobSpec,
-          }),
-        });
-        if (!createRes.ok) throw new Error("Could not create job");
-        const created = (await createRes.json()) as {
-          job?: { id: string };
-          id?: string;
-        };
-        const jobId = created.job?.id || created.id;
-        if (!jobId) throw new Error("No job id");
+      const createRes = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vertical: vertical.id,
+          job_spec: initialSpec,
+        }),
+      });
+      const created = (await createRes.json().catch(() => ({}))) as {
+        job?: { id: string };
+        id?: string;
+        error?: string;
+      };
+      if (!createRes.ok) throw new Error(created.error || "Could not prepare request");
+      const jobId = created.job?.id || created.id;
+      if (!jobId) throw new Error("No job id");
 
-        const extractRes = await fetch(`/api/jobs/${jobId}/extract-pdf`, {
+      let extractRes: Response;
+      if (file) {
+        const form = new FormData();
+        form.append("file", file);
+        if (prompt.trim()) form.append("text", prompt.trim());
+        extractRes = await fetch(`/api/jobs/${jobId}/extract-pdf`, {
+          method: "POST",
+          body: form,
+        });
+      } else {
+        extractRes = await fetch(`/api/jobs/${jobId}/extract-pdf`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: prompt.trim() }),
         });
-        if (extractRes.ok) {
-          const extracted = (await extractRes.json()) as {
-            job?: { job_spec?: JobSpec };
-          };
-          jobSpec = { ...jobSpec, ...(extracted.job?.job_spec || {}) };
-        } else {
-          jobSpec = { ...jobSpec, notes: prompt.trim() };
-        }
-
-        const confirmRes = await fetch(`/api/jobs/${jobId}/confirm`, {
-          method: "PATCH",
-        });
-        if (!confirmRes.ok) throw new Error("Could not confirm job");
-
-        await beginNegotiations(jobId, jobSpec, vertical);
-        return;
+      }
+      const extracted = (await extractRes.json().catch(() => ({}))) as {
+        error?: string;
+        job?: { job_spec?: JobSpec };
+        extraction?: {
+          missing?: Array<{ field: string; message: string }>;
+          invalid?: Array<{ field: string; message: string }>;
+          warnings?: string[];
+        };
+      };
+      if (!extractRes.ok) {
+        throw new Error(extracted.error || "Could not read your request");
       }
 
-      // Empty send — require real job text with location
+      const spec = { ...initialSpec, ...(extracted.job?.job_spec || {}) };
+      const issues: Record<string, string> = {};
+      for (const issue of [
+        ...(extracted.extraction?.missing || []),
+        ...(extracted.extraction?.invalid || []),
+      ]) {
+        issues[issue.field] = issue.message;
+      }
+      setPendingJob({ id: jobId, spec });
+      setFieldIssues(issues);
       setBusy(false);
-      setError(
-        "Describe the job and where it is (city or ZIP), then press Send.",
-      );
-      setStatus(null);
       setStatusStep(null);
+      setStatus("Review the details below before the demo negotiations start.");
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = "";
+      rememberRun({
+        job_id: jobId,
+        vertical: vertical.id as ModeId,
+        created_at: new Date().toISOString(),
+        status: "review",
+        summary: `${vertical.displayName || vertical.label || vertical.id} request`,
+      });
     } catch (err) {
       setBusy(false);
       setStage("compose");
       setError(err instanceof Error ? err.message : "Failed");
+      setStatus(null);
+      setStatusStep(null);
+      setShowDiscovery(false);
+    }
+  };
+
+  const confirmAndStart = async () => {
+    if (!vertical || !pendingJob || busy) return;
+    const issues: Record<string, string> = {};
+    for (const question of vertical.intake?.questions || []) {
+      const value = pendingJob.spec[question.id];
+      if (question.required && (value == null || String(value).trim() === "")) {
+        issues[question.id] = "Required before negotiation can start";
+      } else if (
+        question.type === "number" &&
+        value != null &&
+        value !== "" &&
+        !Number.isFinite(Number(value))
+      ) {
+        issues[question.id] = "Enter a valid number";
+      }
+    }
+    if (Object.keys(issues).length) {
+      setFieldIssues(issues);
+      setError("Please complete the highlighted details.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setStatus("Checking location and matching providers…");
+    try {
+      const resolvedSpec = await discoverProviders(pendingJob.spec, vertical);
+      const confirmRes = await fetch(`/api/jobs/${pendingJob.id}/confirm`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmed: true, job_spec: resolvedSpec }),
+      });
+      const confirmation = (await confirmRes.json().catch(() => ({}))) as {
+        error?: string;
+        missing?: Array<{ field: string; message: string }>;
+        invalid?: Array<{ field: string; message: string }>;
+      };
+      if (!confirmRes.ok) {
+        const serverIssues: Record<string, string> = {};
+        for (const issue of [
+          ...(confirmation.missing || []),
+          ...(confirmation.invalid || []),
+        ]) {
+          serverIssues[issue.field] = issue.message;
+        }
+        setFieldIssues(serverIssues);
+        throw new Error(confirmation.error || "Could not confirm request");
+      }
+      const jobId = pendingJob.id;
+      setPendingJob(null);
+      setFieldIssues({});
+      await beginNegotiations(jobId, resolvedSpec, vertical);
+    } catch (err) {
+      setBusy(false);
+      setStage("compose");
+      setError(err instanceof Error ? err.message : "Could not start negotiations");
       setStatus(null);
       setStatusStep(null);
       setShowDiscovery(false);
@@ -889,7 +969,6 @@ export function ProductWorkspace() {
         signed_url: string | null;
       };
       setIntakeId(data.intake_id);
-      setTalkUrl(data.talk_url);
       setStatus("Multi-agent mode · voice");
       if (data.talk_url) {
         window.open(data.talk_url, "_blank", "noopener,noreferrer");
@@ -947,6 +1026,50 @@ export function ProductWorkspace() {
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
     setFile(f);
+  };
+
+  const openRecentRun = async (run: RecentRun) => {
+    stopPoll();
+    setBusy(true);
+    setError(null);
+    try {
+      const [verticalRes, stateRes] = await Promise.all([
+        fetch(`/api/vertical?id=${run.vertical}`, { cache: "no-store" }),
+        fetch(`/api/jobs/${run.job_id}/state`, { cache: "no-store" }),
+      ]);
+      if (!verticalRes.ok || !stateRes.ok) {
+        throw new Error("This anonymous run is no longer available on the server.");
+      }
+      const cfg = (await verticalRes.json()) as VerticalConfig;
+      const raw = await stateRes.json();
+      const next = normalizeApiState(raw, cfg);
+      if (!next) throw new Error("The saved run could not be read.");
+      setMode(run.vertical);
+      setVertical(cfg);
+      setPendingJob(null);
+      setFieldIssues({});
+      setState(next.phase === "draft" ? null : next);
+      if (next.phase === "draft" && next.job_spec) {
+        setPendingJob({ id: run.job_id, spec: next.job_spec });
+        setStage("compose");
+        setStatus("Review the saved details before starting.");
+        setStatusStep(null);
+        setBusy(false);
+        return;
+      }
+      const complete = next.phase === "complete";
+      setStage(complete ? "done" : "working");
+      setShowDiscovery(true);
+      setDiscoveryZip(String(next.job_spec?.zip || ""));
+      setDiscoveryLocation(String(next.job_spec?.zip || ""));
+      setStatusStep(complete ? "ready" : "negotiate");
+      setStatus(complete ? "Done - your deal is ready" : "Negotiations in progress");
+      setBusy(!complete);
+      if (!complete) startPolling(run.job_id, cfg);
+    } catch (loadError) {
+      setBusy(false);
+      setError(loadError instanceof Error ? loadError.message : "Could not open run");
+    }
   };
 
   const sessions = state?.sessions || [];
@@ -1121,7 +1244,7 @@ export function ProductWorkspace() {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*,.pdf,application/pdf"
+                  accept=".pdf,.txt,application/pdf,text/plain"
                   className="hidden"
                   onChange={onFile}
                 />
@@ -1190,6 +1313,8 @@ export function ProductWorkspace() {
                               setMode(m.id);
                               setModeOpen(false);
                               setState(null);
+                              setPendingJob(null);
+                              setFieldIssues({});
                               setStage("compose");
                               setStatus(null);
                               setStatusStep(null);
@@ -1208,12 +1333,129 @@ export function ProductWorkspace() {
                       </div>
                     )}
                   </div>
-                  <button type="submit" disabled={busy || !vertical} className="btn-send">
+                  <button
+                    type="submit"
+                    disabled={busy || !vertical || Boolean(pendingJob)}
+                    className="btn-send"
+                  >
                     {busy ? "…" : "Send"}
                   </button>
                 </div>
               </div>
             </form>
+
+            {pendingJob && vertical && (
+              <div className="glass-liquid-strong mt-4 w-full p-4 text-left sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="label-section">Confirm the request</p>
+                    <h2 className="mt-0.5 text-[17px] font-semibold">
+                      Check what the agents will use
+                    </h2>
+                    <p className="mt-1 text-[12px] text-[var(--ink-secondary)]">
+                      Missing details stay blank. Nothing is booked or purchased automatically.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[12px] text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                    onClick={() => {
+                      setPendingJob(null);
+                      setFieldIssues({});
+                      setStatus(null);
+                      setError(null);
+                    }}
+                  >
+                    Start over
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {(vertical.intake?.questions || []).map((question) => {
+                    const value = pendingJob.spec[question.id];
+                    const issue = fieldIssues[question.id];
+                    const update = (nextValue: string) => {
+                      setPendingJob((current) =>
+                        current
+                          ? {
+                              ...current,
+                              spec: { ...current.spec, [question.id]: nextValue },
+                            }
+                          : current,
+                      );
+                      setFieldIssues((current) => {
+                        const next = { ...current };
+                        delete next[question.id];
+                        return next;
+                      });
+                      setError(null);
+                    };
+                    return (
+                      <label
+                        key={question.id}
+                        className={question.id === "notes" ? "sm:col-span-2" : ""}
+                      >
+                        <span className="text-[12px] font-medium text-[var(--ink)]">
+                          {question.prompt} {question.required ? "*" : ""}
+                        </span>
+                        {question.type === "enum" || question.type === "boolean" ? (
+                          <select
+                            value={value == null ? "" : String(value)}
+                            onChange={(event) => update(event.target.value)}
+                            className={`mt-1 w-full rounded-xl border bg-white/55 px-3 py-2 text-[13px] outline-none ${
+                              issue ? "border-[var(--danger)]" : "border-white/60"
+                            }`}
+                          >
+                            <option value="">Select…</option>
+                            {(question.options ||
+                              (question.type === "boolean" ? ["yes", "no"] : [])
+                            ).map((option) => (
+                              <option key={option} value={option}>
+                                {option.replaceAll("_", " ")}
+                              </option>
+                            ))}
+                          </select>
+                        ) : question.id === "notes" ? (
+                          <textarea
+                            value={value == null ? "" : String(value)}
+                            onChange={(event) => update(event.target.value)}
+                            rows={2}
+                            className={`mt-1 w-full resize-y rounded-xl border bg-white/55 px-3 py-2 text-[13px] outline-none ${
+                              issue ? "border-[var(--danger)]" : "border-white/60"
+                            }`}
+                          />
+                        ) : (
+                          <input
+                            type={question.type === "number" ? "number" : "text"}
+                            value={value == null ? "" : String(value)}
+                            onChange={(event) => update(event.target.value)}
+                            className={`mt-1 w-full rounded-xl border bg-white/55 px-3 py-2 text-[13px] outline-none ${
+                              issue ? "border-[var(--danger)]" : "border-white/60"
+                            }`}
+                          />
+                        )}
+                        {issue && (
+                          <span className="mt-1 block text-[11px] text-[var(--danger)]">
+                            {issue}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void confirmAndStart()}
+                    disabled={busy}
+                    className="btn-send"
+                  >
+                    {busy ? "Checking…" : "Confirm & start 3 live agents"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {(status || error) && !showResults && (
               <div className="mt-4 w-full text-center text-[13px]">
@@ -1225,6 +1467,31 @@ export function ProductWorkspace() {
                   </p>
                 )}
               </div>
+            )}
+
+            {!showResults && recentRuns.length > 0 && (
+              <details className="mt-4 w-full text-left">
+                <summary className="cursor-pointer text-[12px] font-medium text-[var(--ink-muted)]">
+                  Recent anonymous runs ({recentRuns.length})
+                </summary>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {recentRuns.map((run) => (
+                    <button
+                      key={run.job_id}
+                      type="button"
+                      onClick={() => void openRecentRun(run)}
+                      className="glass-inner p-3 text-left"
+                    >
+                      <span className="block truncate text-[12px] font-medium">
+                        {run.summary}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] text-[var(--ink-muted)]">
+                        {run.status} · {new Date(run.created_at).toLocaleString()}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </details>
             )}
           </section>
 
@@ -1287,6 +1554,8 @@ export function ProductWorkspace() {
                       lines={session?.transcript || []}
                       status={session?.status || "idle"}
                       total={session?.current_price ?? null}
+                      audioUrl={session?.audio_url}
+                      sessionId={session?.session_id}
                     />
                   );
                 })}
@@ -1315,14 +1584,27 @@ export function ProductWorkspace() {
                     {dealReady ? "Recommendation ready" : "Building your deal"}
                   </h2>
                 </div>
-                {dealReady && hasExportableDeal && (
-                  <button
-                    type="button"
-                    onClick={exportReport}
-                    className="link-cta shrink-0 text-[13px] font-semibold"
-                  >
-                    Export PDF →
-                  </button>
+                {dealReady && (
+                  <div className="flex flex-wrap items-center gap-3">
+                    {hasExportableDeal && (
+                      <button
+                        type="button"
+                        onClick={exportReport}
+                        className="link-cta shrink-0 text-[13px] font-semibold"
+                      >
+                        Export PDF →
+                      </button>
+                    )}
+                    {state?.job_id && (
+                      <a
+                        href={`/api/jobs/${state.job_id}/evidence`}
+                        download
+                        className="link-cta shrink-0 text-[13px] font-semibold"
+                      >
+                        Evidence bundle ↓
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -1403,8 +1685,70 @@ export function ProductWorkspace() {
                               {r.why}
                             </p>
                           )}
+                          {r.leverage_chain?.length ? (
+                            <div className="mt-2 border-t border-black/5 pt-1.5">
+                              {r.leverage_chain.slice(-2).map((step, index) => {
+                                const seconds = Math.round(step.t_ms / 1000);
+                                return (
+                                  <button
+                                    key={`${step.kind}-${step.t_ms}-${index}`}
+                                    type="button"
+                                    className="block w-full truncate text-left text-[10px] text-[var(--ink-muted)] underline-offset-2 hover:underline"
+                                    title={step.label}
+                                    onClick={() =>
+                                      document
+                                        .getElementById(
+                                          `transcript-${r.session.session_id}-${seconds}`,
+                                        )
+                                        ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                                    }
+                                  >
+                                    Evidence {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} · {step.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {state?.questions_before_booking?.length ? (
+                    <div className="glass-inner p-3.5 text-left">
+                      <p className="label-section">Questions before booking</p>
+                      <ul className="mt-2 space-y-1.5 text-[13px] text-[var(--ink-secondary)]">
+                        {state.questions_before_booking.map((question) => (
+                          <li key={question.id} className="flex gap-2">
+                            <span aria-hidden>·</span>
+                            <span>{question.question}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {state?.booking_request_draft && (
+                    <div className="glass-inner p-3.5 text-left">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="label-section">Human handoff draft</p>
+                        <button
+                          type="button"
+                          className="text-[11px] font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(
+                              state.booking_request_draft || "",
+                            );
+                            setCopiedDraft(true);
+                            window.setTimeout(() => setCopiedDraft(false), 1500);
+                          }}
+                        >
+                          {copiedDraft ? "Copied" : "Copy draft"}
+                        </button>
+                      </div>
+                      <pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-[var(--ink-secondary)]">
+                        {state.booking_request_draft}
+                      </pre>
                     </div>
                   )}
                 </div>
@@ -1412,7 +1756,7 @@ export function ProductWorkspace() {
 
               {dealReady && vertical && (
                 <div className="mt-5">
-                  <LearningPanel vertical={vertical.id} />
+                  <LearningPanel vertical={vertical.id} jobId={state?.job_id} />
                 </div>
               )}
             </section>

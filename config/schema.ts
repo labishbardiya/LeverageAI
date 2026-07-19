@@ -29,6 +29,26 @@ export const JobSpecFieldUiSchema = z.object({
   type: z.string(),
 });
 
+/**
+ * Quote/report requirements live beside the vertical instead of in UI or
+ * simulator code.  This keeps "what counts as complete" swappable with one
+ * JSON file, which is the central architecture promise of the project.
+ */
+export const QuoteLineItemSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  aliases: z.array(z.string()).default([]),
+  required: z.boolean().default(false),
+});
+
+export const BookingTermSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  question: z.string().min(1),
+  aliases: z.array(z.string()).default([]),
+  required: z.boolean().default(true),
+});
+
 // ---------------------------------------------------------------------------
 // Vendors — public fields vs secret strategy
 // ---------------------------------------------------------------------------
@@ -116,6 +136,33 @@ export const VerticalConfigSchema = z
     default_job_type: z.string().optional(),
     red_flag: RedFlagSchema,
     negotiation_levers: z.array(z.string()).min(1),
+    /** Expected quote categories used by agents, fallback simulation and QA. */
+    quote_line_items: z.array(QuoteLineItemSchema).min(1),
+    /** Terms that must be checked before a human books the recommended deal. */
+    booking_terms: z.array(BookingTermSchema).min(1),
+    /** Free provider-discovery query templates; {location} is substituted. */
+    provider_search_queries: z.array(z.string().min(1)).min(1),
+    /** Optional offline demo snapshot. Filename only; no user path input. */
+    provider_snapshot: z
+      .string()
+      .regex(/^[a-zA-Z0-9._-]+\.json$/)
+      .optional(),
+    /** Safe, declarative OSM filters; query syntax remains owned by the app. */
+    provider_osm: z.object({
+      tags: z
+        .array(
+          z.object({
+            key: z.string().regex(/^[a-zA-Z0-9:_-]+$/),
+            value: z.string().regex(/^[a-zA-Z0-9:_ -]+$/).optional(),
+          }),
+        )
+        .min(1),
+      name_terms: z.array(z.string().min(1)).min(1),
+    }),
+    /** Optional keywords for deterministic, config-driven document parsing. */
+    extraction_hints: z
+      .record(z.string(), z.array(z.string().min(1)))
+      .default({}),
     glossary: z.record(z.string(), z.string()),
     /** Pre-filled job for demo / judges — UI must load from config, never hardcode */
     demo_defaults: z.record(
@@ -167,6 +214,8 @@ export type PublicVendor = Omit<Vendor, "pricing_strategy_secret" | "_comment">;
 
 export function toPublicVendor(v: Vendor): PublicVendor {
   const { pricing_strategy_secret: _s, _comment: _c, ...pub } = v;
+  void _s;
+  void _c;
   return pub;
 }
 

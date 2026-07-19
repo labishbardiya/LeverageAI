@@ -4,16 +4,20 @@ import { useEffect, useState } from "react";
 
 type Row = {
   tactic: string;
-  outcome_delta: number;
   sample_count: number;
+  average_price_improvement_pct: number;
+  selected_for_this_run: boolean;
+  confidence: number;
+  evidence: string;
 };
 
 type Props = {
   vertical: string;
+  jobId?: string | null;
 };
 
 /** Quiet learning strip — no version badges */
-export function LearningPanel({ vertical }: Props) {
+export function LearningPanel({ vertical, jobId }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
   const [sentences, setSentences] = useState<string[]>([]);
 
@@ -22,16 +26,16 @@ export function LearningPanel({ vertical }: Props) {
     (async () => {
       try {
         const res = await fetch(
-          `/api/learning?vertical=${encodeURIComponent(vertical)}`,
+          `/api/learning?vertical=${encodeURIComponent(vertical)}${jobId ? `&job_id=${encodeURIComponent(jobId)}` : ""}`,
           { cache: "no-store" },
         );
         if (!res.ok) return;
         const data = (await res.json()) as {
-          rows?: Row[];
+          comparison?: Row[];
           sentences?: string[];
         };
         if (cancelled) return;
-        setRows(data.rows || []);
+        setRows(data.comparison || []);
         setSentences(data.sentences || []);
       } catch {
         /* ignore */
@@ -40,7 +44,7 @@ export function LearningPanel({ vertical }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [vertical]);
+  }, [jobId, vertical]);
 
   if (!rows.length && !sentences.length) return null;
 
@@ -55,9 +59,12 @@ export function LearningPanel({ vertical }: Props) {
           >
             <span className="font-medium text-[var(--ink)]">
               {r.tactic.replace(/_/g, " ")}
+              {r.selected_for_this_run ? " · used" : ""}
             </span>
             <span className="tabular-nums text-[var(--ink-muted)]">
-              {r.outcome_delta.toFixed(0)}%
+              {r.sample_count > 0
+                ? `${r.average_price_improvement_pct.toFixed(1)}% · ${r.sample_count} run${r.sample_count === 1 ? "" : "s"}`
+                : "exploring"}
             </span>
           </li>
         ))}

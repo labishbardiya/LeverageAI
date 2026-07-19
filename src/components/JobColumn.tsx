@@ -78,7 +78,7 @@ export function JobColumn({
       if (talk) {
         window.open(talk, "_blank", "noopener,noreferrer");
         setVoiceStatus(
-          "Voice tab opened. Tell the agent your AC details, then ask it to submit the job. Form fills automatically…"
+          "Voice tab opened. Tell the agent your job details, then ask it to submit the request. The form fills automatically…"
         );
       } else {
         setVoiceStatus(

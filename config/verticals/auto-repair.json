@@ -218,6 +218,43 @@
     "Disclose AI/assistant role honestly if asked whether you are a robot",
     "Close every call with a structured outcome: itemized_quote | callback_commitment | documented_decline"
   ],
+  "quote_line_items": [
+    { "id": "diagnostic", "label": "Diagnostic fee", "aliases": ["inspection", "scan fee"], "required": false },
+    { "id": "parts", "label": "Parts", "aliases": ["component", "replacement part"], "required": true },
+    { "id": "labor", "label": "Labor", "aliases": ["labor hours", "shop time"], "required": true },
+    { "id": "supplies", "label": "Shop supplies and disposal", "aliases": ["shop fee", "environmental fee", "disposal"], "required": false },
+    { "id": "tax", "label": "Tax", "aliases": ["sales tax"], "required": false }
+  ],
+  "booking_terms": [
+    { "id": "diagnosis", "label": "Confirmed diagnosis", "question": "What diagnosis and test results support this repair recommendation?", "aliases": ["diagnosis", "test result", "inspection", "scan"], "required": true },
+    { "id": "parts", "label": "Parts grade", "question": "Are the quoted parts OEM, aftermarket, remanufactured, or used, and what brands are included?", "aliases": ["oem", "aftermarket", "remanufactured", "used part", "brand"], "required": true },
+    { "id": "warranty", "label": "Warranty", "question": "What parts and labor warranty applies to the repair?", "aliases": ["warranty", "guarantee"], "required": true },
+    { "id": "fees", "label": "Complete out-the-door total", "question": "Does the total include diagnostics, labor, parts, shop supplies, disposal fees, and tax?", "aliases": ["diagnostic", "shop supplies", "disposal", "tax", "out the door"], "required": true },
+    { "id": "authorization", "label": "Authorization limit", "question": "Will the shop obtain approval before performing any work above this written total?", "aliases": ["authorization", "approval", "additional work", "change"], "required": true },
+    { "id": "schedule", "label": "Completion and transport", "question": "What is the expected completion date, and is a loaner or shuttle included?", "aliases": ["completion", "ready", "loaner", "shuttle"], "required": true }
+  ],
+  "provider_search_queries": [
+    "auto repair shop near {location}",
+    "car repair and service near {location}"
+  ],
+  "provider_snapshot": "auto-repair-28202.json",
+  "provider_osm": {
+    "tags": [
+      { "key": "shop", "value": "car_repair" },
+      { "key": "craft", "value": "car_repair" },
+      { "key": "amenity", "value": "car_repair" }
+    ],
+    "name_terms": ["Auto Repair", "Car Repair", "Garage", "Service"]
+  },
+  "extraction_hints": {
+    "vehicle_year": ["year", "model year"],
+    "vehicle_make": ["make", "manufacturer"],
+    "vehicle_model": ["model", "vehicle"],
+    "symptom": ["brake", "check engine", "not cooling", "oil leak", "battery", "starter", "alternator"],
+    "diagnostic_done": ["diagnosed", "diagnostic", "code"],
+    "urgency": ["today", "urgent", "this week", "flexible"],
+    "zip": ["zip", "postal code"]
+  },
   "glossary": {
     "tonnage": "Cooling capacity; 1 ton \u2248 12,000 BTU/hr. Typical homes use 2\u20135 ton units.",
     "SEER2": "Seasonal Energy Efficiency Ratio (updated standard) for AC efficiency.",

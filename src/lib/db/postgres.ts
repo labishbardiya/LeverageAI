@@ -210,6 +210,20 @@ export class PostgresStore implements DataStore {
     return rows[0] ? mapSession(rows[0]) : null;
   }
 
+  async findSessionByConversationId(
+    conversation_id: string
+  ): Promise<Session | null> {
+    const pool = getPool();
+    const { rows } = await pool.query(
+      `SELECT * FROM sessions
+       WHERE negotiator_conversation_id = $1 OR counter_conversation_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [conversation_id]
+    );
+    return rows[0] ? mapSession(rows[0]) : null;
+  }
+
   async listSessionsByJob(job_id: string): Promise<Session[]> {
     const pool = getPool();
     const { rows } = await pool.query(

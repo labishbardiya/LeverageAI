@@ -157,19 +157,10 @@ export function buildDealReview(input: {
     }
   }
 
-  let usedTranscriptFallback = false;
-
   const totalsBySession = new Map<string, number | null>();
   for (const s of input.sessions) {
     const q = latestBySession.get(s.id);
-    let total = s.current_total ?? q?.total ?? null;
-    if (total == null && input.transcripts?.length) {
-      const inferred = inferTotalFromTranscripts(s.id, input.transcripts);
-      if (inferred != null) {
-        total = inferred;
-        usedTranscriptFallback = true;
-      }
-    }
+    const total = q?.total ?? s.current_total ?? null;
     totalsBySession.set(s.id, total);
   }
 
@@ -204,7 +195,7 @@ export function buildDealReview(input: {
         rfPct ?? thrPct
       }% under market mid${mid != null ? ` ${formatUsd(mid)}` : ""}). Bait risk.`;
     } else if (total != null) {
-      label = q ? "Clean itemized quote" : "Spoken total (parsed)";
+      label = q ? "Logged itemized quote" : "Unverified session total";
       plain = `${s.vendor_name}: ${formatUsd(total)}${
         mid != null ? ` (fair mid ~${formatUsd(mid)})` : ""
       }.`;
@@ -322,13 +313,8 @@ export function buildDealReview(input: {
 
   const how_we_negotiated = [
     "Three agents negotiated in parallel.",
-    "Only full itemized (or spoken firm) totals rank; bait prices don't win.",
+    "Only database-logged quotes rank; transcript-only numbers never become deals.",
   ];
-  if (usedTranscriptFallback) {
-    how_we_negotiated.push(
-      "Some totals recovered from call transcripts when tools did not log."
-    );
-  }
 
   let confidence = 40;
   const closed = input.sessions.filter(
@@ -343,14 +329,14 @@ export function buildDealReview(input: {
   if (input.tool_calls?.some((t) => t.tool_name === "get_competing_bids")) {
     confidence += 8;
   }
-  if (usedTranscriptFallback) confidence -= 12;
+  if (!input.quotes.length) confidence -= 25;
   confidence = Math.min(96, Math.max(25, confidence));
 
   const headline = top_pick
     ? top_pick.total != null
       ? `Your deal: ${top_pick.vendor_name} at ${formatUsd(top_pick.total)}`
-      : `Your deal: ${top_pick.vendor_name}`
-    : "Your deal";
+      : `Recommended next step: ${top_pick.vendor_name}`
+    : "No verified deal yet";
 
   return {
     headline,
@@ -361,6 +347,6 @@ export function buildDealReview(input: {
     confidence,
     verdicts,
     generated_at: new Date().toISOString(),
-    from_transcript_fallback: usedTranscriptFallback || undefined,
+    from_transcript_fallback: undefined,
   };
 }

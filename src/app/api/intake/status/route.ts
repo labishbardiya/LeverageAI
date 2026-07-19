@@ -6,10 +6,15 @@ export async function GET(req: NextRequest) {
   try {
     const id = req.nextUrl.searchParams.get("intake_id");
     const vertical = req.nextUrl.searchParams.get("vertical") || "hvac";
-    if (id) {
-      return NextResponse.json({ draft: await getIntakeDraft(id) });
-    }
-    return NextResponse.json({ draft: await getLatestFilled(vertical) });
+    const draft = id
+      ? await getIntakeDraft(id)
+      : await getLatestFilled(vertical);
+    return NextResponse.json({
+      draft,
+      intake_id: draft?.id ?? null,
+      status: draft?.status ?? "missing",
+      job_spec: draft?.job_spec ?? null,
+    });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "failed", draft: null },

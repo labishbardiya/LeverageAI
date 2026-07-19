@@ -5,6 +5,8 @@
 import { z } from "zod";
 import { getStore } from "@/lib/db";
 import type { Session } from "@/lib/types";
+import { loadVertical } from "@/lib/config/loadVertical";
+import { assessQuoteCompleteness } from "@/lib/review/quoteEvidence";
 
 export const OUTCOME_TYPES = [
   "itemized_quote",
@@ -58,7 +60,8 @@ export async function closeSession(raw: unknown): Promise<CloseSessionResult> {
     };
   }
 
-  const { session_id, job_id, outcome_type, callback_window, summary } =
+  let { outcome_type } = parsed.data;
+  const { session_id, job_id, callback_window, summary } =
     parsed.data;
   const store = getStore();
 
@@ -84,15 +87,37 @@ export async function closeSession(raw: unknown): Promise<CloseSessionResult> {
     };
   }
 
+  // The challenge's stonewaller track is a documented refusal with the offered
+  // callback preserved as evidence, not a successful price outcome.
+  if (existing.vendor_id === "stonewaller") {
+    outcome_type = "documented_decline";
+  }
+
   if (outcome_type === "itemized_quote") {
     const quotes = await store.listQuotesByJob(existing.job_id);
-    const hasQuote = quotes.some((q) => q.session_id === session_id);
-    if (!hasQuote) {
+    const sessionQuotes = quotes.filter((q) => q.session_id === session_id);
+    const latest = sessionQuotes.at(-1);
+    if (!latest) {
       return {
         ok: false,
         code: "MISSING_QUOTE",
         error:
           "Cannot close as itemized_quote without a logged quote for this session",
+      };
+    }
+    const job = await store.getJob(existing.job_id);
+    if (!job) {
+      return { ok: false, code: "JOB_NOT_FOUND", error: "Job does not exist" };
+    }
+    const completeness = assessQuoteCompleteness(
+      loadVertical(job.vertical),
+      latest.line_items,
+    );
+    if (!completeness.itemized) {
+      return {
+        ok: false,
+        code: "ITEMIZATION_INCOMPLETE",
+        error: `Cannot close as itemized_quote; missing required categories: ${completeness.missing_required.join(", ") || "at least two distinct line items"}`,
       };
     }
   }
@@ -113,50 +138,40 @@ export async function closeSession(raw: unknown): Promise<CloseSessionResult> {
     };
   }
 
-  // Best-effort playbook learning + XState session close (does not block)
-  void (async () => {
-    try {
-      const job = await store.getJob(session.job_id);
-      if (!job) return;
+  // Persist learning before returning. It is still non-critical, but awaiting
+  // it prevents serverless teardown from silently dropping observations.
+  try {
+    const job = await store.getJob(session.job_id);
+    if (job) {
       try {
         const { onSessionClosed } = await import("@/lib/orchestrator/runtime");
         onSessionClosed(session.job_id);
       } catch {
-        /* ignore */
+        /* state-machine telemetry is optional */
       }
       const transcripts = await store.listTranscriptsBySession(session_id);
       const quotes = await store.listQuotesByJob(session.job_id);
-      const sessionQuotes = quotes
-        .filter((q) => q.session_id === session_id)
+      const priceHistory = quotes
+        .filter((quote) => quote.session_id === session_id)
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
-        .map((q) => q.total)
-        .filter((n): n is number => typeof n === "number");
-      const priceHistory =
-        sessionQuotes.length >= 2
-          ? sessionQuotes
-          : session.current_total != null && sessionQuotes.length === 1
-            ? [...sessionQuotes, session.current_total]
-            : sessionQuotes.length
-              ? sessionQuotes
-              : session.current_total != null
-                ? [session.current_total]
-                : [];
+        .map((quote) => quote.total)
+        .filter((total): total is number => typeof total === "number");
       const { extractLearningsFromSession } = await import(
         "@/lib/learning/extract"
       );
       await extractLearningsFromSession({
         vertical: job.vertical,
-        transcripts: transcripts.map((t) => ({
-          speaker: t.speaker,
-          text: t.text,
-          ts_ms: t.ts_ms,
+        transcripts: transcripts.map((event) => ({
+          speaker: event.speaker,
+          text: event.text,
+          ts_ms: event.ts_ms,
         })),
         priceHistory,
       });
-    } catch {
-      /* learning is non-critical */
     }
-  })();
+  } catch (error) {
+    console.warn("[closeSession] learning update failed", error);
+  }
 
   return { ok: true, session };
 }

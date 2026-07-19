@@ -18,6 +18,7 @@ import type {
   CreateConversationOptions,
   SignedUrlResponse,
 } from "./types";
+import { loadVertical } from "@/lib/config/loadVertical";
 
 /**
  * Get a signed WebSocket/conversation URL for the browser widget.
@@ -159,15 +160,19 @@ export function buildTripleBridgeIntents(input: {
   /** Base session id; per-vendor suffix applied. */
   sessionIdBase: string;
   jobSpecJson: string;
+  vertical?: string;
 }): BridgePairIntent[] {
   const negotiatorAgentId = getAgentId("negotiator");
   const intents: BridgePairIntent[] = [];
+  const vertical = loadVertical(input.vertical || "hvac");
 
   for (const companyKey of COUNTER_AGENT_SLOTS) {
     const counterAgentId = tryGetAgentId(companyKey);
     if (!counterAgentId) {
       continue;
     }
+    const vendor = vertical.vendors.find((item) => item.id === companyKey);
+    if (!vendor) continue;
     intents.push({
       negotiatorAgentId,
       counterAgentId,
@@ -175,6 +180,13 @@ export function buildTripleBridgeIntents(input: {
       jobId: input.jobId,
       sessionId: `${input.sessionIdBase}_${companyKey}`,
       jobSpecJson: input.jobSpecJson,
+      vertical: vertical.id,
+      verticalName: vertical.displayName,
+      companyName: vendor.name ?? vendor.displayName,
+      quoteLineItemsJson: JSON.stringify(vertical.quote_line_items),
+      negotiationLeversJson: JSON.stringify(vertical.negotiation_levers),
+      counterStrategy:
+        vendor.pricing_strategy_secret || "Follow the configured vendor policy.",
     });
   }
 

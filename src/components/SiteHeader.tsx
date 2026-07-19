@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Props = {
   /** Show Close Smart Deals on the right (home only). */
@@ -28,9 +29,9 @@ export function SiteHeader({ showCta = false, logoAsHomeLink = false }: Props) {
         {/* Fixed-width logo slot — same box home (no link) and live (link) */}
         <div className="site-logo-slot">
           {logoAsHomeLink ? (
-            <a href="/" className="site-logo-link no-underline">
+            <Link href="/" className="site-logo-link no-underline">
               {logoInner}
-            </a>
+            </Link>
           ) : (
             <span className="site-logo-link">{logoInner}</span>
           )}

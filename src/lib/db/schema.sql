@@ -95,17 +95,10 @@ CREATE TABLE IF NOT EXISTS negotiation_learnings (
 );
 
 CREATE TABLE IF NOT EXISTS providers (
-  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  vertical       text NOT NULL,
-  place_id       text,
-  name           text,
-  rating         double precision,
-  user_rating_count int,
-  phone          text,
-  address        text,
-  score          double precision,
-  payload        jsonb,
-  updated_at     timestamptz NOT NULL DEFAULT now()
+  place_id   text PRIMARY KEY,
+  vertical   text NULL,
+  payload    jsonb NOT NULL DEFAULT '{}'::jsonb,
+  fetched_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- Idempotent migrations for existing DBs
@@ -115,3 +108,5 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS counter_conversation_id text NULL;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS audio_url text NULL;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS recording_note text NULL;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_event_at timestamptz NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_job_vendor_uidx
+  ON sessions (job_id, vendor_id);

@@ -9,6 +9,11 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { assertPriceDropsHaveLeverage } from "../src/lib/tools/leverageChain";
+import {
+  bayesianOrderingFixture,
+  combineDealScore,
+} from "../src/lib/ranking/providerScore";
+import { runGoldenMachineSequence } from "../src/lib/orchestrator/machine";
 
 const OUTCOME_TYPES = new Set([
   "itemized_quote",
@@ -262,11 +267,6 @@ function assertRedNeverFirst(run: RunPayload): Check {
       red: boolean;
     }>;
     const clean = itemized.filter((x) => !x.red).sort((a, b) => a.total - b.total);
-    const winnerIsRed =
-      itemized.length > 0 &&
-      clean.length > 0 &&
-      itemized.every((x) => x.red || x.total >= clean[0]!.total) &&
-      !clean[0];
     const redWins =
       itemized.sort((a, b) => a.total - b.total)[0]?.red === true &&
       clean.length > 0;
@@ -611,15 +611,6 @@ function main() {
 
 function assertBayesianOrdering(): Check {
   try {
-    const {
-      bayesianOrderingFixture,
-    } = require("../src/lib/ranking/providerScore") as {
-      bayesianOrderingFixture: () => {
-        highVolume: number;
-        thinFiveStar: number;
-        pass: boolean;
-      };
-    };
     const r = bayesianOrderingFixture();
     return {
       name: "13. Bayesian provider order (4.7×900 > 5.0×3)",
@@ -637,14 +628,6 @@ function assertBayesianOrdering(): Check {
 
 function assertRedFlagBeatsProviderScore(): Check {
   try {
-    const { combineDealScore } = require("../src/lib/ranking/providerScore") as {
-      combineDealScore: (
-        p: number,
-        rank: number,
-        n: number,
-        red: boolean
-      ) => number;
-    };
     const redHighProvider = combineDealScore(99, 1, 2, true);
     const cleanLowProvider = combineDealScore(40, 2, 2, false);
     // red must never win: red score is -1
@@ -667,13 +650,8 @@ function assertRedFlagBeatsProviderScore(): Check {
 
 function assertPlaybookNoDollarFigures(): Check {
   try {
-    // Sync import of pure sentence builder path — run getPlaybook via dynamic require of extract
-    const { getPlaybook } = require("../src/lib/learning/extract") as {
-      getPlaybook: (v: string) => Promise<{
-        sentences: string[];
-      }>;
-    };
-    // getPlaybook is async — use deasync pattern via spawn would be heavy; test seed sentences inline
+    // The live playbook builder enforces this invariant too; this fixture keeps
+    // the evaluator synchronous and catches copy regressions.
     const sentences = [
       "cite competing bid: moved price about −14% on average across 6 calls — prefer when evidence exists (never invent figures).",
       "request itemization: moved price about −8% on average across 9 calls — prefer when evidence exists (never invent figures).",
@@ -730,9 +708,6 @@ function assertAllVerticalsRedFlagShape(): Check {
 
 function assertOrchestratorGolden(): Check {
   try {
-    const { runGoldenMachineSequence } = require("../src/lib/orchestrator/machine") as {
-      runGoldenMachineSequence: () => { sequence: string[]; pass: boolean };
-    };
     const r = runGoldenMachineSequence();
     return {
       name: "17. XState golden sequence",

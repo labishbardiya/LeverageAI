@@ -5,6 +5,7 @@ import {
   getConversationSignedUrl,
   normalizeSignedUrl,
 } from "@/lib/elevenlabs/conversations";
+import { loadVertical } from "@/lib/config/loadVertical";
 
 /**
  * POST /api/intake/start
@@ -15,6 +16,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const vertical =
       typeof body.vertical === "string" ? body.vertical : "hvac";
+    const verticalConfig = loadVertical(vertical);
     const draft = await createIntakeDraft(vertical);
     const agentId = tryGetAgentId("intake");
 
@@ -28,18 +30,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const dynamic_variables = {
+      intake_id: draft.id,
+      vertical,
+      vertical_name: verticalConfig.displayName,
+      intake_questions_json: JSON.stringify(verticalConfig.intake.questions),
+    };
+    let talk_url: string | null = null;
+    if (agentId) {
+      const talk = new URL("https://elevenlabs.io/app/talk-to");
+      talk.searchParams.set("agent_id", agentId);
+      talk.searchParams.set(
+        "vars",
+        Buffer.from(JSON.stringify(dynamic_variables), "utf8").toString(
+          "base64",
+        ),
+      );
+      talk_url = talk.toString();
+    }
+
     return NextResponse.json({
       intake_id: draft.id,
       vertical,
       agent_id: agentId,
       signed_url,
-      dynamic_variables: {
-        intake_id: draft.id,
-        vertical,
-      },
-      talk_url: agentId
-        ? `https://elevenlabs.io/app/talk-to?agent_id=${encodeURIComponent(agentId)}`
-        : null,
+      dynamic_variables,
+      talk_url,
       poll_url: `/api/intake/status?intake_id=${draft.id}`,
     });
   } catch (e) {

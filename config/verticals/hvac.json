@@ -431,6 +431,47 @@
     "Disclose AI/assistant role honestly if asked whether you are a robot",
     "Close every call with a structured outcome: itemized_quote | callback_commitment | documented_decline"
   ],
+  "quote_line_items": [
+    { "id": "equipment", "label": "Equipment", "aliases": ["unit", "condenser", "air handler", "heat pump"], "required": true },
+    { "id": "labor", "label": "Labor and installation", "aliases": ["installation", "install", "crew"], "required": true },
+    { "id": "permit", "label": "Permit", "aliases": ["inspection"], "required": false },
+    { "id": "refrigerant", "label": "Refrigerant", "aliases": ["r-410a", "r410a", "charge"], "required": false },
+    { "id": "haul_away", "label": "Haul-away and disposal", "aliases": ["disposal", "old unit removal"], "required": false },
+    { "id": "electrical", "label": "Electrical work", "aliases": ["disconnect", "breaker", "panel"], "required": false }
+  ],
+  "booking_terms": [
+    { "id": "model_efficiency", "label": "Equipment model and efficiency", "question": "Which exact equipment model numbers and SEER2 efficiency are included?", "aliases": ["model", "seer", "seer2", "efficiency"], "required": true },
+    { "id": "warranty", "label": "Warranty", "question": "What manufacturer, labor, and workmanship warranties are included, and who registers them?", "aliases": ["warranty", "guarantee"], "required": true },
+    { "id": "permit", "label": "Permit and inspection", "question": "Does the total include every required permit and inspection?", "aliases": ["permit", "inspection"], "required": true },
+    { "id": "scope", "label": "Complete installation scope", "question": "Does the written price include refrigerant, electrical work, startup, disposal, and all installation materials?", "aliases": ["refrigerant", "electrical", "startup", "disposal", "materials"], "required": true },
+    { "id": "schedule", "label": "Schedule", "question": "What are the confirmed installation date, duration, and delay policy?", "aliases": ["install date", "schedule", "duration", "timeline"], "required": true },
+    { "id": "payment", "label": "Payment terms", "question": "What deposit is required, when is the balance due, and are financing fees included?", "aliases": ["deposit", "payment", "balance", "financing"], "required": true },
+    { "id": "validity", "label": "Quote validity", "question": "How long is this written quote valid, and what could change the final price?", "aliases": ["valid until", "expires", "price change", "change order"], "required": true }
+  ],
+  "provider_search_queries": [
+    "HVAC contractor near {location}",
+    "air conditioning repair and installation near {location}"
+  ],
+  "provider_snapshot": "hvac-28202.json",
+  "provider_osm": {
+    "tags": [
+      { "key": "craft", "value": "hvac" },
+      { "key": "shop", "value": "hvac" },
+      { "key": "craft", "value": "plumber" },
+      { "key": "craft", "value": "electrician" }
+    ],
+    "name_terms": ["HVAC", "Heating", "Air Conditioning", "Cooling", "Mechanical"]
+  },
+  "extraction_hints": {
+    "system_type": ["central ac", "heat pump", "mini split", "furnace", "package unit"],
+    "system_age_years": ["years old", "year old", "age"],
+    "tonnage": ["ton", "tonnage"],
+    "home_sqft": ["square feet", "sq ft", "sqft"],
+    "symptom": ["not cooling", "not heating", "warm air", "leaking", "noise", "replacement"],
+    "ductwork": ["duct", "ductwork"],
+    "urgency": ["today", "urgent", "this week", "flexible"],
+    "zip": ["zip", "postal code"]
+  },
   "glossary": {
     "tonnage": "Cooling capacity; 1 ton \u2248 12,000 BTU/hr. Typical homes use 2\u20135 ton units.",
     "SEER2": "Seasonal Energy Efficiency Ratio (updated standard) for AC efficiency.",

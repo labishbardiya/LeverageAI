@@ -40,6 +40,7 @@ type Props = {
 export function DiscoveryPanel({
   vertical,
   zip,
+  location,
   onContinue,
   busy,
   compact,
@@ -54,7 +55,9 @@ export function DiscoveryPanel({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    queueMicrotask(() => {
+      if (!cancelled) setLoading(true);
+    });
     (async () => {
       try {
         const res = await fetch("/api/discovery", {
@@ -119,7 +122,7 @@ export function DiscoveryPanel({
             <p className="mt-0.5 text-[12px] text-[var(--ink-secondary)]">
               {loading
                 ? "Scoring providers…"
-                : source || "ProviderScore ranks shops before we dial"}
+                : source || "ProviderScore builds the real-world call list"}
             </p>
           </div>
           {!loading && top3.length > 0 && (
@@ -188,6 +191,11 @@ export function DiscoveryPanel({
             {caption}
           </p>
         )}
+        {!loading && top3.length > 0 && (
+          <p className="mt-1 text-[10px] text-[var(--ink-muted)]">
+            Demo negotiations use isolated counter-agents; these businesses are discovery evidence, not called parties.
+          </p>
+        )}
         {attribution && (
           <p className="mt-1 text-[10px] text-[var(--ink-muted)]">{attribution}</p>
         )}
@@ -213,7 +221,7 @@ export function DiscoveryPanel({
       ) : (
         <>
           <div className="rounded-xl border border-black/8 bg-white/30 p-3">
-            <p className="text-xs font-medium">Agents will call these 3</p>
+            <p className="text-xs font-medium">Real-world call-list candidates</p>
             <ul className="mt-2 space-y-3">
               {top3.map((p, i) => (
                 <li

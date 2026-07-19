@@ -95,4 +95,10 @@ export interface BridgePairIntent {
   playbookHint?: string;
   /** Active vertical id so agents adapt (hvac | movers | …). */
   vertical?: string;
+  verticalName?: string;
+  companyName: string;
+  quoteLineItemsJson: string;
+  negotiationLeversJson: string;
+  /** Secret strategy is sent only to the counter-agent socket. */
+  counterStrategy: string;
 }

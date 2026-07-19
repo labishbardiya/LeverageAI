@@ -894,5 +894,24 @@ export function normalizeApiState(
         : buildClientDealReview(ranked, sessions, vertical);
   }
 
-  return { job_id, phase, job_spec, sessions, ranked, deal_review };
+  const questions_before_booking = Array.isArray(o.questions_before_booking)
+    ? (o.questions_before_booking as NonNullable<
+        JobState["questions_before_booking"]
+      >)
+    : [];
+  const booking_request_draft =
+    typeof o.booking_request_draft === "string"
+      ? o.booking_request_draft
+      : undefined;
+
+  return {
+    job_id,
+    phase,
+    job_spec,
+    sessions,
+    ranked,
+    deal_review,
+    questions_before_booking,
+    booking_request_draft,
+  };
 }

@@ -8,7 +8,7 @@ import type {
   SessionCard,
   VerticalConfig,
 } from "@/lib/ui/types";
-import { redFlagThresholdPct, uiCopy } from "@/lib/ui/types";
+import { uiCopy } from "@/lib/ui/types";
 import { GrokOpinion } from "./GrokOpinion";
 
 type Props = {

@@ -9,8 +9,9 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * POST /api/jobs/[id]/extract-pdf
- * Heuristic extraction from PDF/text/image bytes (no paid vision required).
- * Output always validated against the same JobSpec shape.
+ * Deterministic extraction from text or text-bearing PDFs. Scanned/image-only
+ * files are rejected with a useful message instead of returning invented job
+ * facts. Output is validated against the active vertical schema.
  */
 export async function POST(req: NextRequest, ctx: Ctx) {
   try {
@@ -39,10 +40,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
     const contentType = req.headers.get("content-type") || "";
     let text: string | undefined;
-    let fileBase64: string | undefined;
-    let mime: string | undefined;
     let filename: string | undefined;
     let clientSpec: JobSpec | undefined;
+    let documentPath: "free_text" | "pdf_text" | "text_file" = "free_text";
+    const warnings: string[] = [];
 
     if (contentType.includes("application/json")) {
       const body = await req.json().catch(() => ({}));
@@ -67,11 +68,53 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       if (file && typeof file !== "string") {
         const f = file as File;
         filename = f.name;
-        mime = f.type || "application/pdf";
+        const mime = f.type || "application/octet-stream";
+        const maxBytes = 8 * 1024 * 1024;
+        if (f.size > maxBytes) {
+          return NextResponse.json(
+            { error: "Document is larger than the 8 MB upload limit." },
+            { status: 413 },
+          );
+        }
         const buf = Buffer.from(await f.arrayBuffer());
-        fileBase64 = buf.toString("base64");
-        // rough text for heuristics
-        text = buf.toString("latin1").slice(0, 8000);
+        if (mime === "application/pdf" || /\.pdf$/i.test(filename)) {
+          try {
+            const { extractText, getDocumentProxy } = await import("unpdf");
+            const pdf = await getDocumentProxy(new Uint8Array(buf));
+            const extracted = await extractText(pdf, { mergePages: true });
+            text = [text, extracted.text].filter(Boolean).join("\n");
+            documentPath = "pdf_text";
+            if (extracted.text.trim().length < 30) {
+              warnings.push(
+                "This PDF appears scanned or contains very little selectable text. Add the missing details before confirming.",
+              );
+            }
+          } catch (error) {
+            return NextResponse.json(
+              {
+                error: "The PDF could not be read.",
+                code: "PDF_EXTRACTION_FAILED",
+                detail: error instanceof Error ? error.message : undefined,
+              },
+              { status: 422 },
+            );
+          }
+        } else if (
+          mime.startsWith("text/") ||
+          /\.(txt|md|csv)$/i.test(filename)
+        ) {
+          text = [text, buf.toString("utf8")].filter(Boolean).join("\n");
+          documentPath = "text_file";
+        } else {
+          return NextResponse.json(
+            {
+              error:
+                "Unsupported file. Upload a text-based PDF or TXT file. Scanned images need OCR before upload.",
+              code: "UNSUPPORTED_DOCUMENT_TYPE",
+            },
+            { status: 415 },
+          );
+        }
       }
     }
 
@@ -87,13 +130,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       });
     }
 
-    const { job_spec, path } = await extractJobSpecFromUpload({
+    const extraction = await extractJobSpecFromUpload({
       vertical: vertical.id,
       text,
-      fileBase64,
-      mime,
       filename,
     });
+    const { job_spec } = extraction;
 
     const allowed = new Set<string>([
       ...Object.keys(vertical.job_spec_schema?.fields ?? {}),
@@ -118,7 +160,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
     return NextResponse.json({
       job: updated,
-      extraction: { path, fields: Object.keys(filtered) },
+      extraction: {
+        ...extraction,
+        path: documentPath,
+        fields: Object.keys(filtered),
+        warnings: [...warnings, ...extraction.warnings],
+      },
     });
   } catch (e) {
     console.error("[POST /api/jobs/:id/extract-pdf]", e);

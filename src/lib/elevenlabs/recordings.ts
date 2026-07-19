@@ -29,6 +29,39 @@ async function putVercelBlob(
   }
 }
 
+export async function storeRecordingBuffer(
+  sessionId: string,
+  buf: Buffer
+): Promise<string | null> {
+  const store = getStore();
+  const blobUrl = await putVercelBlob(sessionId, buf);
+  if (blobUrl) {
+    await store.updateSession(sessionId, {
+      audio_url: blobUrl,
+      recording_note: null,
+    });
+    return blobUrl;
+  }
+
+  if (process.env.VERCEL !== "1") {
+    const dir = join(process.cwd(), "public", "recordings");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${sessionId}.mp3`), buf);
+    const localUrl = `/recordings/${sessionId}.mp3`;
+    await store.updateSession(sessionId, {
+      audio_url: localUrl,
+      recording_note: null,
+    });
+    return localUrl;
+  }
+
+  await store.updateSession(sessionId, {
+    recording_note:
+      "Transcript only - set BLOB_READ_WRITE_TOKEN for durable audio storage",
+  });
+  return null;
+}
+
 export async function fetchAndStoreRecording(
   sessionId: string,
   conversationId: string
@@ -58,20 +91,10 @@ export async function fetchAndStoreRecording(
     );
     if (audioRes.ok) {
       const buf = Buffer.from(await audioRes.arrayBuffer());
-      const blobUrl = await putVercelBlob(sessionId, buf);
-      if (blobUrl) {
-        audio_url = blobUrl;
-        recording_note = null;
-      } else if (process.env.VERCEL !== "1") {
-        const dir = join(process.cwd(), "public", "recordings");
-        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-        writeFileSync(join(dir, `${sessionId}.mp3`), buf);
-        audio_url = `/recordings/${sessionId}.mp3`;
-        recording_note = null;
-      } else {
-        recording_note =
-          "Transcript only — set BLOB_READ_WRITE_TOKEN for audio on Vercel";
-      }
+      audio_url = await storeRecordingBuffer(sessionId, buf);
+      recording_note = audio_url
+        ? null
+        : "Transcript only - set BLOB_READ_WRITE_TOKEN for audio on Vercel";
     }
   } catch (e) {
     console.warn("[recordings] audio fetch failed", e);

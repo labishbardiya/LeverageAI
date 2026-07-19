@@ -1,94 +1,78 @@
-# ElevenLabs Agents Setup — LeverageAI
+# Fresh ElevenLabs setup
 
-**Primary path:** `npm run provision`  
-**Fallback:** manual dashboard steps below.
+LeverageAI uses ElevenLabs Agents only. It provisions reusable workspace tools, five isolated agents, and a signed post-call webhook from source-controlled prompts and schemas.
 
-Obeys project law: **ElevenLabs Agents platform only** (no custom STT/TTS). Counter-agent prompts are **never** loaded by the negotiator runtime.
+## Prerequisites
 
----
+- A new ElevenLabs API key with permission to create agents, tools, and workspace webhooks.
+- A public HTTPS deployment or tunnel. `localhost` cannot receive ElevenLabs webhooks.
+- A migrated Neon database in `DATABASE_URL`.
 
-## Primary: provision script
+Set these in `.env.local` without committing them:
 
 ```bash
-# 1) Tunnel localhost so ElevenLabs can hit webhooks
-ngrok http 3000
-
-# 2) Provision (creates or PATCHes leverageai-* agents)
-export ELEVENLABS_API_KEY=...
-export APP_BASE_URL=https://xxxx.ngrok-free.app   # or production URL
-npm run provision
-
-# 3) Paste printed agent IDs into .env.local
+ELEVENLABS_API_KEY=...
+APP_BASE_URL=https://your-public-host
+DATABASE_URL=...
+BLOB_READ_WRITE_TOKEN=... # recommended for durable audio
 ```
 
-The script:
-
-1. Reads `agents/prompts/*` (5 isolated files)
-2. Attaches webhook tools from `agents/tool-schemas.json` → `${APP_BASE_URL}/api/tools/*`
-3. Sets dynamic variable placeholders (`job_id`, `session_id`, …)
-4. Is **idempotent** on name prefix `leverageai-`
-
----
-
-## Env vars
+## One-command provisioning
 
 ```bash
-ELEVENLABS_API_KEY=
-ELEVENLABS_INTAKE_AGENT_ID=
-ELEVENLABS_NEGOTIATOR_AGENT_ID=
-ELEVENLABS_TOUGH_AGENT_ID=
-ELEVENLABS_STONEWALLER_AGENT_ID=
-ELEVENLABS_UPSELLER_AGENT_ID=
-APP_BASE_URL=https://your-host
-DATABASE_URL=          # optional
-GOOGLE_PLACES_API_KEY= # optional
-XAI_API_KEY=           # optional document vision
+npm run provision -- --write-env
+npm run provision:verify
 ```
 
-**Live mode** (bridged agent↔agent sessions) activates only when **all five agent IDs + API key** are set. Otherwise `POST /api/sessions/start` stays scaffold/replay-safe.
+The first command:
 
----
+1. validates the selected conversational model against `/v1/convai/llm/list` (default `gemini-2.5-flash`, override with `ELEVENLABS_LLM_ID`);
+2. creates or updates the five workspace webhook tools from `agents/tool-schemas.json`;
+3. generates `TOOLS_WEBHOOK_SECRET` when absent and attaches it as `x-tools-secret`;
+4. creates or updates `leverageai-intake`, `leverageai-negotiator`, `leverageai-tough`, `leverageai-stonewaller`, and `leverageai-upseller`;
+5. attaches tools through `conversation_config.agent.prompt.tool_ids`;
+6. creates an HMAC workspace webhook at `/api/webhooks/elevenlabs`, enables transcript/audio delivery and retry support;
+7. verifies exact remote prompts, exact tool IDs, and workspace webhook settings;
+8. writes agent IDs and generated secrets to `.env.local` without printing them.
 
-## Tool attachment (who gets what)
+The command is idempotent by `leverageai-` names. If a matching post-call webhook already exists but its original HMAC secret is lost, delete that webhook in ElevenLabs and rerun so a new secret can be captured.
 
-| Agent | Tools |
-|-------|--------|
-| Intake | `submit_spec`, `close_session` |
-| Negotiator | `get_competing_bids`, `lookup_benchmark`, `log_quote`, `close_session` |
-| Tough / Stonewaller / Upseller | `log_quote`, `close_session` |
+## Tool isolation
 
-Webhook base: `${APP_BASE_URL}/api/tools/<name>`
+| Agent | Attached tools |
+|---|---|
+| Intake | `submit_spec` |
+| Negotiator | `log_quote`, `get_competing_bids`, `lookup_benchmark`, `close_session` |
+| Tough | none |
+| Stonewaller | none |
+| Upseller | none |
 
----
+Counter-agents never receive DB tools and never share prompt text with the negotiator. Their secret strategies are injected only into their own conversation socket.
 
-## Manual dashboard fallback
+## Post-call evidence
 
-If the API shape changes, create 5 agents in the ElevenLabs UI:
+ElevenLabs sends `post_call_transcription` and `post_call_audio` to `/api/webhooks/elevenlabs`. The app:
 
-1. **leverageai-intake** — paste `agents/prompts/intake.md`
-2. **leverageai-negotiator** — paste `agents/prompts/negotiator.md` + tools
-3. **leverageai-tough** — paste `agents/prompts/counter-agents/tough.md` only
-4. **leverageai-stonewaller** — paste stonewaller.md only
-5. **leverageai-upseller** — paste upseller.md only
+- validates `ElevenLabs-Signature` with timestamp tolerance and constant-time HMAC comparison;
+- resolves the exact session by conversation ID (or its scoped dynamic session ID);
+- deduplicates webhook retries;
+- stores the negotiator-side recording as the canonical evidence track;
+- never accepts an unsigned webhook.
 
-**Never** paste counter-agent prompts into the negotiator (isolation law).
+Set `BLOB_READ_WRITE_TOKEN` in deployment for durable audio. Local development falls back to `public/recordings`; Vercel without Blob records an explicit transcript-only note.
 
----
-
-## Agent-to-agent bridge
-
-ElevenLabs has no native server-side agent↔agent mode. LeverageAI opens two WebSockets per session (`src/lib/elevenlabs/bridge.ts`) and relays audio + interruption frames. Sessions run **sequentially** for clean tool logs. Watchdog force-closes after 90s silence as `documented_decline(timeout)`.
-
----
-
-## Verify
+## Verification and failure modes
 
 ```bash
-npm run eval    # 12/12
+npm run provision:verify
+npm test
+npm run eval
 npm run smoke
-npm run dev
-# Stage insurance (zero env):
-open http://localhost:3000/?replay=true
-# Live-run offline replay:
-open http://localhost:3000/?replay=live
+npm run build
 ```
+
+- `Prompt mismatch`: remote agent was edited manually; rerun provisioning.
+- `Tool mismatch`: remove stale manual attachments by rerunning provisioning.
+- `APP_BASE_URL must use HTTPS`: deploy or start a tunnel first.
+- `post-call webhook secret is missing`: restore the original secret or recreate the webhook.
+- Live mode remains off unless all five IDs, the API key, and `DATABASE_URL` are configured.

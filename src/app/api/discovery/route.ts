@@ -17,6 +17,7 @@ import {
   resolveGeoFromJobText,
 } from "@/lib/places/geocode";
 import { searchOverpassNear } from "@/lib/places/overpass";
+import { loadVertical } from "@/lib/config/loadVertical";
 
 const schema = z.object({
   vertical: z.string().default("hvac"),
@@ -27,24 +28,32 @@ const schema = z.object({
   zip: z.string().min(3).max(12).optional(),
 });
 
+type DiscoveryPayload = Record<string, unknown>;
+type DiscoveryCache = Map<
+  string,
+  { expiresAt: number; payload: DiscoveryPayload }
+>;
+
+function discoveryCache(): DiscoveryCache {
+  const globalCache = globalThis as typeof globalThis & {
+    __leverageAiDiscoveryCache?: DiscoveryCache;
+  };
+  if (!globalCache.__leverageAiDiscoveryCache) {
+    globalCache.__leverageAiDiscoveryCache = new Map();
+  }
+  return globalCache.__leverageAiDiscoveryCache;
+}
+
 function queryFor(vertical: string, where: string): string {
-  if (vertical === "movers") return `moving company near ${where}`;
-  if (vertical === "medical-imaging")
-    return `MRI imaging center near ${where}`;
-  if (vertical === "auto-repair") return `auto repair shop near ${where}`;
-  return `HVAC contractor near ${where}`;
+  const config = loadVertical(vertical);
+  const template = config.provider_search_queries[0];
+  return template.replaceAll("{location}", where);
 }
 
 /** Last-resort offline file — only if live network paths all fail */
 function loadSnapshotFallback(vertical: string): PlaceDetails[] {
-  const name =
-    vertical === "movers"
-      ? "movers-29730.json"
-      : vertical === "medical-imaging"
-        ? "medical-imaging-28202.json"
-        : vertical === "auto-repair"
-          ? "auto-repair-28202.json"
-          : "hvac-28202.json";
+  const name = loadVertical(vertical).provider_snapshot;
+  if (!name) return [];
   const p = join(process.cwd(), "data", "discovery", name);
   if (!existsSync(p)) return [];
   try {
@@ -73,10 +82,11 @@ async function searchGooglePlaces(
           "places.id,places.displayName,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.formattedAddress,places.location,places.googleMapsUri",
       },
       body: JSON.stringify({ textQuery }),
+      signal: AbortSignal.timeout(5_000),
     }
-  );
-  if (!res.ok) {
-    console.warn("[discovery] Places searchText", res.status);
+  ).catch(() => null);
+  if (!res?.ok) {
+    if (res) console.warn("[discovery] Places searchText", res.status);
     return [];
   }
   const data = (await res.json()) as {
@@ -156,6 +166,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const cacheKey = parsed.data.zip
+      ? `${vertical}:${parsed.data.zip.slice(0, 5)}`
+      : null;
+    if (cacheKey) {
+      const cached = discoveryCache().get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return NextResponse.json({ ...cached.payload, cached: true });
+      }
+      if (cached) discoveryCache().delete(cacheKey);
+    }
+
     const hints = extractLocationHints(freeText);
     const geo =
       (await resolveGeoFromJobText(freeText, parsed.data.zip || hints.zip)) ||
@@ -202,8 +223,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (detailsList.length === 0 && geo) {
-      return NextResponse.json(
-        {
+      const payload: DiscoveryPayload = {
           vertical,
           zip: geo.zip || hints.zip || parsed.data.zip,
           location: whereLabel,
@@ -216,9 +236,14 @@ export async function POST(req: NextRequest) {
           error:
             "We found your area but no shops returned from live search. Add GOOGLE_PLACES_API_KEY for denser GMB results, or try a nearby ZIP.",
           code: "NO_PLACES_IN_AREA",
-        },
-        { status: 200 }
-      );
+      };
+      if (cacheKey) {
+        discoveryCache().set(cacheKey, {
+          expiresAt: Date.now() + 60_000,
+          payload,
+        });
+      }
+      return NextResponse.json(payload, { status: 200 });
     }
 
     const ranked = detailsList
@@ -241,7 +266,7 @@ export async function POST(req: NextRequest) {
     const resolvedZip =
       geo?.zip || hints.zip || parsed.data.zip || undefined;
 
-    return NextResponse.json({
+    const payload: DiscoveryPayload = {
       vertical,
       zip: resolvedZip,
       location: whereLabel,
@@ -267,7 +292,14 @@ export async function POST(req: NextRequest) {
       caption:
         "Top local providers ranked for this job location — fetched live from your query.",
       live: !source.includes("Offline"),
-    });
+    };
+    if (cacheKey) {
+      discoveryCache().set(cacheKey, {
+        expiresAt: Date.now() + 5 * 60_000,
+        payload,
+      });
+    }
+    return NextResponse.json(payload);
   } catch (e) {
     console.error("[POST /api/discovery]", e);
     return NextResponse.json(

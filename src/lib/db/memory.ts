@@ -168,6 +168,19 @@ export class MemoryStore implements DataStore {
     return s ? { ...s } : null;
   }
 
+  async findSessionByConversationId(
+    conversation_id: string
+  ): Promise<Session | null> {
+    const session = [...getTables().sessions.values()]
+      .reverse()
+      .find(
+        (candidate) =>
+          candidate.negotiator_conversation_id === conversation_id ||
+          candidate.counter_conversation_id === conversation_id
+      );
+    return session ? { ...session } : null;
+  }
+
   async listSessionsByJob(job_id: string): Promise<Session[]> {
     return [...getTables().sessions.values()]
       .filter((s) => s.job_id === job_id)

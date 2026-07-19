@@ -203,6 +203,41 @@
     "Disclose AI/assistant role honestly if asked whether you are a robot",
     "Close every call with a structured outcome: itemized_quote | callback_commitment | documented_decline"
   ],
+  "quote_line_items": [
+    { "id": "technical", "label": "Facility or technical fee", "aliases": ["facility fee", "technical component", "scan fee"], "required": true },
+    { "id": "professional", "label": "Radiologist interpretation", "aliases": ["professional fee", "reading fee", "radiologist"], "required": true },
+    { "id": "contrast", "label": "Contrast", "aliases": ["contrast material", "gadolinium"], "required": false },
+    { "id": "admin", "label": "Administrative fees", "aliases": ["registration", "records", "facility surcharge"], "required": false }
+  ],
+  "booking_terms": [
+    { "id": "cash_total", "label": "Complete cash price", "question": "Is this the complete cash-pay price including both the scan and radiologist interpretation?", "aliases": ["cash price", "self-pay", "technical fee", "radiologist", "professional fee"], "required": true },
+    { "id": "contrast", "label": "Contrast", "question": "Does the order require contrast, and is any contrast charge included?", "aliases": ["contrast", "gadolinium"], "required": true },
+    { "id": "order", "label": "Order and authorization", "question": "Is a physician order or prior authorization required before scheduling?", "aliases": ["physician order", "referral", "authorization"], "required": true },
+    { "id": "scanner", "label": "Scanner and protocol", "question": "What scanner strength and protocol will be used for this body part?", "aliases": ["1.5t", "3t", "tesla", "protocol", "scanner"], "required": true },
+    { "id": "report", "label": "Report delivery", "question": "When will the radiology report be ready and how will the patient and referring clinician receive it?", "aliases": ["report", "results", "radiologist turnaround"], "required": true },
+    { "id": "cancellation", "label": "Cancellation policy", "question": "What are the cancellation, rescheduling, and refund policies?", "aliases": ["cancel", "reschedule", "refund"], "required": true }
+  ],
+  "provider_search_queries": [
+    "MRI imaging center near {location}",
+    "cash pay diagnostic imaging near {location}"
+  ],
+  "provider_snapshot": "medical-imaging-28202.json",
+  "provider_osm": {
+    "tags": [
+      { "key": "healthcare", "value": "radiology" },
+      { "key": "amenity", "value": "clinic" },
+      { "key": "amenity", "value": "hospital" }
+    ],
+    "name_terms": ["MRI", "Imaging", "Radiology", "Diagnostic"]
+  },
+  "extraction_hints": {
+    "procedure": ["mri", "ct", "ultrasound", "x-ray", "imaging"],
+    "body_part": ["brain", "knee", "spine", "shoulder", "lumbar", "ankle", "hip"],
+    "contrast": ["with contrast", "without contrast", "no contrast"],
+    "referral_in_hand": ["referral", "order", "prescription"],
+    "urgency": ["today", "urgent", "this week", "flexible"],
+    "zip": ["zip", "postal code"]
+  },
   "glossary": {
     "tonnage": "Cooling capacity; 1 ton \u2248 12,000 BTU/hr. Typical homes use 2\u20135 ton units.",
     "SEER2": "Seasonal Energy Efficiency Ratio (updated standard) for AC efficiency.",

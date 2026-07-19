@@ -13,6 +13,10 @@ import {
   loadVertical,
 } from "@/lib/config/loadVertical";
 import { resolveJobTypeKey, type Quote } from "@/lib/types";
+import {
+  assessQuoteCompleteness,
+  type QuoteCompleteness,
+} from "@/lib/review/quoteEvidence";
 
 const lineItemSchema = z.object({
   label: z.string().min(1),
@@ -91,7 +95,7 @@ export const logQuoteSchema = z.object({
 export type LogQuoteBody = z.infer<typeof logQuoteSchema>;
 
 export type LogQuoteResult =
-  | { ok: true; quote: Quote }
+  | { ok: true; quote: Quote; completeness: QuoteCompleteness }
   | { ok: false; error: string; code: string };
 
 const TOTAL_TOLERANCE = 1; // dollars
@@ -163,8 +167,15 @@ export async function logQuote(raw: unknown): Promise<LogQuoteResult> {
 
   // Red-flag from config only (threshold_below_benchmark, never hardcode 0.30)
   let red_flag = false;
+  let completeness: QuoteCompleteness = {
+    itemized: input.line_items.length >= 2,
+    covered_required: [],
+    missing_required: [],
+    coverage: input.line_items.length >= 2 ? 1 : 0,
+  };
   try {
     const vertical = loadVertical(job.vertical);
+    completeness = assessQuoteCompleteness(vertical, input.line_items);
     const jobType = resolveJobTypeKey(job.job_spec, {
       default_job_type: vertical.default_job_type,
       benchmark_key: vertical.red_flag.benchmark_key,
@@ -195,5 +206,5 @@ export async function logQuote(raw: unknown): Promise<LogQuoteResult> {
     notes: input.notes ?? null,
   });
 
-  return { ok: true, quote };
+  return { ok: true, quote, completeness };
 }

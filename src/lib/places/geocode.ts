@@ -52,8 +52,9 @@ export async function geocodeLocation(
   const res = await fetch(url.toString(), {
     headers: { "User-Agent": UA, Accept: "application/json" },
     next: { revalidate: 3600 },
-  } as RequestInit);
-  if (!res.ok) return null;
+    signal: AbortSignal.timeout(3_500),
+  } as RequestInit).catch(() => null);
+  if (!res?.ok) return null;
   const rows = (await res.json()) as Array<{
     lat: string;
     lon: string;

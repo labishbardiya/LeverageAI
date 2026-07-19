@@ -162,9 +162,10 @@ export async function fetchPlaceDetails(
           "X-Goog-Api-Key": key,
           "X-Goog-FieldMask": FIELD_MASK,
         },
+        signal: AbortSignal.timeout(4_000),
       }
-    );
-    if (res.ok) {
+    ).catch(() => null);
+    if (res?.ok) {
       const raw = (await res.json()) as Record<string, unknown>;
       const details = parseDetails(placeId, raw);
       await cacheSet(details);

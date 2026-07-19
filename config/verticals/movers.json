@@ -348,6 +348,45 @@
     "Disclose AI/assistant role honestly if asked whether you are a robot",
     "Close every call with a structured outcome: itemized_quote | callback_commitment | documented_decline"
   ],
+  "quote_line_items": [
+    { "id": "labor", "label": "Crew labor", "aliases": ["movers", "hourly labor", "crew"], "required": true },
+    { "id": "truck", "label": "Truck", "aliases": ["vehicle", "van"], "required": true },
+    { "id": "travel", "label": "Travel and mileage", "aliases": ["fuel", "mileage", "travel time", "trip fee"], "required": false },
+    { "id": "packing", "label": "Packing materials and service", "aliases": ["boxes", "tape", "packing"], "required": false },
+    { "id": "access", "label": "Stairs and long-carry", "aliases": ["stairs", "elevator", "long carry"], "required": false },
+    { "id": "insurance", "label": "Coverage", "aliases": ["valuation", "insurance", "protection"], "required": false }
+  ],
+  "booking_terms": [
+    { "id": "estimate_type", "label": "Estimate type", "question": "Is this a binding or not-to-exceed written estimate based on the confirmed inventory?", "aliases": ["binding", "not-to-exceed", "non-binding", "estimate type"], "required": true },
+    { "id": "inventory", "label": "Inventory and access", "question": "Is the confirmed inventory plus stairs, elevator, parking, and long-carry distance included?", "aliases": ["inventory", "stairs", "elevator", "parking", "long carry"], "required": true },
+    { "id": "fees", "label": "All fees", "question": "Are fuel, travel time, packing materials, minimum hours, and heavy-item fees included?", "aliases": ["fuel", "travel", "minimum hours", "packing materials", "heavy item"], "required": true },
+    { "id": "coverage", "label": "Damage coverage", "question": "What valuation or damage coverage is included, and how are claims handled?", "aliases": ["valuation", "coverage", "insurance", "claims"], "required": true },
+    { "id": "schedule", "label": "Arrival window", "question": "What is the confirmed arrival window and the policy for delays or rescheduling?", "aliases": ["arrival", "window", "delay", "reschedule"], "required": true },
+    { "id": "payment", "label": "Deposit and cancellation", "question": "What deposit is required, when is payment due, and what is the cancellation policy?", "aliases": ["deposit", "payment", "cancellation", "refund"], "required": true }
+  ],
+  "provider_search_queries": [
+    "moving company near {location}",
+    "local residential movers near {location}"
+  ],
+  "provider_snapshot": "movers-29730.json",
+  "provider_osm": {
+    "tags": [
+      { "key": "shop", "value": "storage_rental" },
+      { "key": "office", "value": "company" }
+    ],
+    "name_terms": ["Moving", "Movers", "Relocation", "Van Lines"]
+  },
+  "extraction_hints": {
+    "move_type": ["apartment", "house", "studio", "office", "local move"],
+    "from_city": ["from", "origin", "pickup"],
+    "to_city": ["to", "destination", "dropoff"],
+    "bedrooms": ["bedroom", "bed", "br"],
+    "home_sqft": ["square feet", "sq ft", "sqft"],
+    "stairs_or_elevator": ["stairs", "elevator", "ground floor"],
+    "packing": ["packing", "pack", "boxes"],
+    "urgency": ["weekend", "within two weeks", "flexible", "date"],
+    "zip": ["zip", "postal code"]
+  },
   "glossary": {
     "long_carry": "Distance from truck to door beyond standard; often billed as a fee.",
     "binding_estimate": "Not-to-exceed style quote when inventory is fixed.",

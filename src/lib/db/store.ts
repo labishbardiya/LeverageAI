@@ -66,6 +66,7 @@ export interface DataStore {
 
   createSession(input: CreateSessionInput): Promise<Session>;
   getSession(id: string): Promise<Session | null>;
+  findSessionByConversationId(conversation_id: string): Promise<Session | null>;
   listSessionsByJob(job_id: string): Promise<Session[]>;
   updateSession(
     id: string,

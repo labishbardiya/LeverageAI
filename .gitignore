@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/tmp/
+/public/recordings/
 
 # next.js
 /.next/

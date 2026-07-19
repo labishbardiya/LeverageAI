@@ -43,7 +43,7 @@ const DETECT: { tactic: Tactic; re: RegExp }[] = [
   },
   {
     tactic: "request_itemization",
-    re: /itemize|line.?item|break( that)? down|equipment.*labor|permit|haul-?away/i,
+    re: /itemize|line.?item|break( that)? down|every fee|all fees|quote categories/i,
   },
   {
     tactic: "ask_for_manager_price",
@@ -120,34 +120,39 @@ export async function extractLearningsFromSession(input: {
   if (series.length < 2) {
     series = pricesFromTranscripts(input.transcripts);
   }
-  if (series.length < 2) return events;
+
+  const observed = new Map<Tactic, number>();
+  for (const line of input.transcripts
+    .filter((event) => event.speaker === "negotiator")
+    .sort((a, b) => a.ts_ms - b.ts_ms)) {
+    const tactic = detectTactic(line.text);
+    if (tactic && !observed.has(tactic)) observed.set(tactic, line.ts_ms);
+  }
+  if (!observed.size) return events;
 
   let dropPct = 0;
   for (let i = 1; i < series.length; i++) {
-    if (series[i]! < series[i - 1]!) {
-      dropPct = ((series[i - 1]! - series[i]!) / series[i - 1]!) * 100;
-      // keep scanning for largest meaningful drop
-      const d = ((series[i - 1]! - series[i]!) / series[i - 1]!) * 100;
-      if (d > dropPct) dropPct = d;
+    const before = series[i - 1]!;
+    const after = series[i]!;
+    if (after < before) {
+      dropPct = Math.max(dropPct, ((before - after) / before) * 100);
     }
   }
-  // Prefer first→last overall drop when monotonic-ish
-  const first = series[0]!;
-  const last = series[series.length - 1]!;
-  if (first > last) {
-    dropPct = Math.max(dropPct, ((first - last) / first) * 100);
+  if (series.length >= 2 && series[0]! > series.at(-1)!) {
+    dropPct = Math.max(
+      dropPct,
+      ((series[0]! - series.at(-1)!) / series[0]!) * 100,
+    );
   }
-  if (dropPct <= 0) return events;
 
-  // Find last negotiator tactic before end
-  const nego = input.transcripts.filter((t) => t.speaker === "negotiator");
-  for (let i = nego.length - 1; i >= 0; i--) {
-    const t = detectTactic(nego[i]!.text);
-    if (t) {
-      events.push({ tactic: t, delta: -dropPct });
-      await upsertLearning(input.vertical, t, -dropPct);
-      break;
-    }
+  // One observation per tactic per session. Successful sessions credit the
+  // last evidenced tactic (closest causal action); other used tactics receive
+  // zero rather than disappearing, preventing survivorship bias.
+  const latest = [...observed.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  for (const tactic of observed.keys()) {
+    const delta = tactic === latest && dropPct > 0 ? -dropPct : 0;
+    events.push({ tactic, delta });
+    await upsertLearning(input.vertical, tactic, delta);
   }
   return events;
 }
@@ -174,53 +179,17 @@ export async function getPlaybook(vertical: string): Promise<{
     }));
   }
 
-  // Seed defaults if empty — all arms so UCB has a full prior
+  // Empty rows are honest zero-sample observations. Exploration priors belong
+  // in the UCB selector and are never presented as historical call results.
   if (rows.length === 0) {
     const now = new Date().toISOString();
-    rows = [
-      {
-        vertical,
-        tactic: "cite_competing_bid",
-        outcome_delta: -14,
-        sample_count: 6,
-        updated_at: now,
-      },
-      {
-        vertical,
-        tactic: "request_itemization",
-        outcome_delta: -8,
-        sample_count: 9,
-        updated_at: now,
-      },
-      {
-        vertical,
-        tactic: "cite_benchmark",
-        outcome_delta: -5,
-        sample_count: 4,
-        updated_at: now,
-      },
-      {
-        vertical,
-        tactic: "ask_for_manager_price",
-        outcome_delta: -3,
-        sample_count: 2,
-        updated_at: now,
-      },
-      {
-        vertical,
-        tactic: "bundle_scope_reduction",
-        outcome_delta: -2,
-        sample_count: 2,
-        updated_at: now,
-      },
-      {
-        vertical,
-        tactic: "silence_after_anchor",
-        outcome_delta: -1,
-        sample_count: 2,
-        updated_at: now,
-      },
-    ];
+    rows = TACTICS.map((tactic) => ({
+      vertical,
+      tactic,
+      outcome_delta: 0,
+      sample_count: 0,
+      updated_at: now,
+    }));
   }
 
   const ranked = [...rows].sort(
@@ -232,6 +201,9 @@ export async function getPlaybook(vertical: string): Promise<{
   const sentences = top.map((r) => {
     const pct = Math.abs(Math.round(r.outcome_delta));
     const label = r.tactic.replace(/_/g, " ");
+    if (r.sample_count === 0) {
+      return `${label}: no completed-call evidence yet - controlled exploration only.`;
+    }
     return `${label}: moved price about −${pct}% on average across ${r.sample_count} calls — prefer when evidence exists (never invent figures).`;
   });
 

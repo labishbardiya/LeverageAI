@@ -1,216 +1,115 @@
 # LeverageAI
 
-> *The AI that picks up the phone so you don’t overpay.*
+LeverageAI is an evidence-first voice negotiator for Hack-Nation Challenge 01 (ElevenLabs). It turns one confirmed request into three parallel, distinct agent-to-agent negotiations and returns a ranked, auditable recommendation. It never purchases or books automatically.
 
-Hack-Nation Challenge 01 · **ElevenLabs** · “The Negotiator” track — voice agent that phone-shops and haggles quotes end-to-end on **one screen**.
+The challenge contract and repository law are in [AGENTS.md](./AGENTS.md). Architecture rationale is in [docs/ARCHITECTURE_DECISIONS.md](./docs/ARCHITECTURE_DECISIONS.md).
 
-**Primary vertical:** HVAC (broken AC / 3-ton replacement)  
-**Config-swap proof:** movers via `?vertical=movers` — zero code changes.
+## Product routes
 
-Standing law: [`AGENTS.md`](./AGENTS.md) — every agent and contributor must obey it.
+| Route | Purpose |
+|---|---|
+| `/` | Existing marketing homepage; intentionally unchanged |
+| `/livee` | Live product: text/PDF/voice intake, confirmation, discovery, three negotiations, evidence |
+| `/live` | Deterministic golden demo/replay for stage reliability |
 
----
+The live and demo experiences are honest about the counterparties: local discovery uses real market data, while the challenge demo negotiates against three isolated ElevenLabs counter-agents. No real business is represented as having been called.
 
-## What judges see (one screen)
+## End-to-end flow
 
-| Column | Zone | Purpose |
-|--------|------|---------|
-| 1 | **YOUR JOB** | Voice intake or PDF → job-spec card → **Looks right — get me quotes** |
-| 2 | **THE CALLS** | 3 live (or replay) negotiations · price ticks · transcript ticker |
-| 3 | **YOUR DEAL** | Ranked report · red-flag bait prices never #1 · transcript evidence |
+1. Text, a text-bearing PDF/TXT, or the ElevenLabs intake agent produces the same config-defined `job_spec`.
+2. Missing or invalid required terms are shown to the user. Nothing starts until the user explicitly confirms.
+3. Google Places (if configured) or free OSM/Nominatim builds and scores the real-world call-list candidates. Requests are bounded by timeouts and cached by vertical + ZIP.
+4. Exactly three deep sessions run in parallel: tough, stonewaller, and upseller. These cover the challenge’s required negotiation styles without multiplying voice cost.
+5. Only persisted, itemized quotes may be ranked. Competing-bid leverage can cite only DB rows returned by `get_competing_bids`.
+6. Each call ends as `itemized_quote`, `callback_commitment`, or `documented_decline`.
+7. The result includes timestamped evidence, questions generated from missing booking terms, a human-review handoff draft, learning comparison, recordings when available, and a ZIP evidence bundle.
 
----
+## Why three agents, not more?
 
-## Quick start (demo-ready without ElevenLabs)
+Discovery can score many providers cheaply without an LLM. Voice negotiation is the expensive stage, so it uses three deliberately diverse agents rather than several near-duplicates. Three is also the challenge minimum and the repository’s acceptance contract. With roughly 100,000 ElevenLabs credits, the efficient funnel is:
+
+`many discovered providers -> deterministic ranking -> three voice negotiations -> one evidence-backed recommendation`
+
+Adding agents before each of the three styles is reliable would increase cost, latency, and failure surface more than information gain. A future adaptive fourth call should be triggered only when all three outcomes are incomplete or too close; it is intentionally not enabled during the hackathon because `AGENTS.md` requires exactly three counter-agents.
+
+## Learning loop
+
+The negotiator does not rewrite its own honesty rules. After each closed session, deterministic tactic detection records both successes and zero-improvement uses. A constrained UCB1 bandit then balances exploration of under-tested tactics with exploitation of tactics that have produced observed price improvement in that vertical. The UI reports sample count, average improvement, confidence, and whether a tactic was selected for the current run.
+
+This can improve tactic selection as evidence accumulates, but it does not claim that every individual call must improve. Safety, quote completeness, job immutability, and the no-invented-bids rule are fixed constraints outside the learner.
+
+## Quick start
 
 ```bash
-cd the-negotiator
-cp .env.example .env.local   # optional for replay-only
 npm install
 npm run dev
 ```
 
 Open:
 
-- **Golden demo (recommended on stage):**  
-  [http://localhost:3000/?replay=true](http://localhost:3000/?replay=true)
-- **Movers config swap:**  
-  [http://localhost:3000/?vertical=movers&replay=true](http://localhost:3000/?vertical=movers&replay=true)
-- **Live path (needs agents + optional DB):**  
-  [http://localhost:3000](http://localhost:3000) → *Use demo job* → confirm
+- Live workspace: `http://localhost:3000/livee`
+- Golden stage demo: `http://localhost:3000/live`
+- Config proof: `http://localhost:3000/live?vertical=movers`
+
+Quality gates:
 
 ```bash
-npm run eval          # 5 acceptance assertions on golden run
-npx tsx scripts/smoke-tools.ts   # tool honesty + ranking smoke
+npm test
+npm run eval
+npm run smoke
+npm run lint
+npm run build
 ```
 
----
+## Fresh ElevenLabs account
 
-## Environment variables
-
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `ELEVENLABS_API_KEY` | Live voice / provision | ElevenLabs API |
-| `ELEVENLABS_INTAKE_AGENT_ID` | Live | Agent #1 |
-| `ELEVENLABS_NEGOTIATOR_AGENT_ID` | Live | Agent #2 |
-| `ELEVENLABS_TOUGH_AGENT_ID` | Live | Counter #3 |
-| `ELEVENLABS_STONEWALLER_AGENT_ID` | Live | Counter #4 |
-| `ELEVENLABS_UPSELLER_AGENT_ID` | Live | Counter #5 |
-| `APP_BASE_URL` | Provision webhooks | Public origin (ngrok/prod) |
-| `NEXT_PUBLIC_ELEVENLABS_INTAKE_AGENT_ID` | Browser mic | Optional |
-| `DATABASE_URL` | Optional | Neon Postgres; **in-memory** if unset |
-| `GOOGLE_PLACES_API_KEY` | Optional | Live discovery; offline snapshots otherwise |
-| `XAI_API_KEY` | Optional | Document vision intake; heuristics otherwise |
-| `BLOB_READ_WRITE_TOKEN` | Optional | Recording blob storage |
-| `NEXT_PUBLIC_DEFAULT_VERTICAL` | Optional | Default `hvac` |
-
-Never commit secrets. Use `.env.local` (gitignored).
-
-### Provision agents
+Use a deployed or tunneled public HTTPS URL. The provisioner uses the current workspace-tool API, attaches exact tool IDs, creates five isolated agents, creates an HMAC post-call webhook, enables transcript/audio delivery with retries, and verifies the remote graph.
 
 ```bash
-export ELEVENLABS_API_KEY=...
-export APP_BASE_URL=https://your-ngrok-or-host
-npm run provision   # primary path — see agents/SETUP.md
+# Put the new key and deployed URL in .env.local first.
+npm run provision -- --write-env
+npm run provision:verify
 ```
 
-### Live mode vs replay
+`--write-env` writes only generated agent IDs and generated webhook secrets. It never prints API keys or HMAC secrets. See [agents/SETUP.md](./agents/SETUP.md).
 
-- **Live** only when all 5 agent IDs + `ELEVENLABS_API_KEY` are set → sequential WebSocket bridges (`src/lib/elevenlabs/bridge.ts`).
-- **`?replay=true`** — offline golden insurance (zero env).
-- **`?replay=live`** — offline replay of `data/golden/live-run.json` (tool-log + leverage structure).
+## Environment
 
-### Production telephony path
+| Variable | Purpose |
+|---|---|
+| `ELEVENLABS_API_KEY` | New ElevenLabs account API key |
+| Five `ELEVENLABS_*_AGENT_ID` values | Intake, negotiator, and three isolated counterparties |
+| `DATABASE_URL` | Shared Neon data; required for live/serverless sessions |
+| `APP_BASE_URL` | Public HTTPS app origin used by ElevenLabs tools/webhooks |
+| `TOOLS_WEBHOOK_SECRET` | Authenticates agent tool calls |
+| `ELEVENLABS_WEBHOOK_SECRET` | Verifies post-call HMAC signatures |
+| `BLOB_READ_WRITE_TOKEN` | Durable recording URLs on Vercel |
+| `GOOGLE_PLACES_API_KEY` | Optional denser discovery; OSM is the free fallback |
 
-Real PSTN is a **chosen-not-built** decision for the MVP. See `src/lib/telephony/twilio.ts` (`NOT_ENABLED` guard). ElevenLabs supports native Twilio/SIP; Places discovery shows where the call list comes from; counter-agents stand in for negotiation styles (brief-allowed).
+All secrets remain in `.env.local`/deployment settings and are gitignored.
 
-### Live sessions (non-blocking)
+## Evidence bundle
 
-`POST /api/sessions/start` returns immediately with `{ live: true, status: "bridging" }` and runs agent↔agent bridges **in the background**. Poll `GET /api/jobs/:id/state` or SSE `/api/events` — sessions move `connecting` → `live` → `closed`.
+`GET /api/jobs/:id/evidence` returns a ZIP containing:
 
-## Architecture (production stack)
+- `report.pdf`
+- `transcripts.json` and `transcripts.md`
+- `quotes.json`
+- `recordings.json`
+- `tool-events.json`
+- `learning-comparison.json`
+- `booking-request.txt`
+- `manifest.json`
 
-```
-Orchestrator (XState v5) — /architecture
-  → ElevenLabs Agents (5): intake · negotiator · tough · stonewaller · upseller
-  → Webhook tools (x-tools-secret) → Neon Postgres
-  → Google Places (search + details, 7d cache) → ProviderScore
-  → Playbook learnings → negotiator dynamic vars
-  → Report (ranked · leverage chain · export)
-Optional: Twilio PSTN (ENABLE_REAL_OUTBOUND) · Grok voice second opinion · Vercel Blob
-```
+The report never turns transcript text into a quote silently. If a complete persisted quote or recording does not exist, the absence is stated explicitly.
 
-**TCPA warning:** Real outbound cold-calls to businesses have legal risk. Keep `ENABLE_REAL_OUTBOUND=false` unless you only dial numbers you own / have consent for (demo teammate phone).
+## Config-driven verticals
 
-### Production deploy checklist (Vercel + Neon)
+All vertical-specific intake fields, benchmarks, quote categories, booking terms, discovery filters, negotiation levers, and provider personas live in `config/verticals/*.json`. Current configs are HVAC, movers, cash medical imaging, and auto repair. Shared code contains no vertical-specific prices or fee labels.
 
-1. **Neon:** create project → run `scripts/migrate.sql` → set `DATABASE_URL` (required on serverless).
-2. **Vercel:** import repo → set env vars → deploy → stable URL.
-3. Set `APP_BASE_URL=https://your-app.vercel.app` and `TOOLS_WEBHOOK_SECRET=...`.
-4. `npm run provision` once so agent webhooks point at the stable URL + secret headers.
-5. Optional: `BLOB_READ_WRITE_TOKEN` for call audio on Vercel.
-6. Stage pitch still uses `?replay=true` (zero env).
+## Scope boundaries
 
----
-
-## Create the 5 ElevenLabs agents (human parallel track)
-
-Full runbook: **[`agents/SETUP.md`](./agents/SETUP.md)**
-
-| # | Role | Prompt file | Tools |
-|---|------|-------------|-------|
-| 1 | Intake | `agents/prompts/intake.md` | `submit_spec` |
-| 2 | Negotiator | `agents/prompts/negotiator.md` | `log_quote`, `get_competing_bids`, `lookup_benchmark`, `close_session` |
-| 3 | Tough | `agents/prompts/counter-agents/tough.md` | none |
-| 4 | Stonewaller | `agents/prompts/counter-agents/stonewaller.md` | none |
-| 5 | Upseller | `agents/prompts/counter-agents/upseller.md` | none |
-
-**Isolation law:** never merge negotiator + counter-agent prompts. Counter pricing floors are secret.
-
-Tool JSON schemas: `agents/tool-schemas.json`  
-Webhook base: `https://YOUR_HOST/api/tools/*` (or localhost via tunnel for dashboard tools).
-
----
-
-## Architecture (short)
-
-```
-[ One screen UI ]
-      │
-      ├─ POST /api/jobs → confirm → POST /api/sessions/start (3 vendors from config)
-      │
-      ├─ Negotiator ×3  ←→  Counter-agents (ElevenLabs only; no custom STT/TTS)
-      │       tools → log_quote / get_competing_bids / lookup_benchmark / close_session
-      │
-      └─ GET /api/jobs/:id/state  (poll 1s) or GET /api/events?job_id= (SSE)
-```
-
-- Verticals: `/config/verticals/hvac.json`, `movers.json` — **no hardcoded prices in UI code**
-- Honesty: leverage only via `get_competing_bids` (real DB rows)
-- Outcomes: `itemized_quote` | `callback_commitment` | `documented_decline`
-- Replay insurance: `?replay=true` streams `data/golden/run.json` through the same UI pipeline
-
----
-
-## Postgres (optional)
-
-```bash
-psql "$DATABASE_URL" -f scripts/migrate.sql
-```
-
-Without `DATABASE_URL`, the app uses an in-memory store (fine for demo + smoke).
-
----
-
-## Golden run / recorder
-
-- Canonical payload: `data/golden/run.json` (synced under `public/golden/` for static fallback)
-- Proves: price drop after real competing bid, AI disclosure, stonewaller decline + callback, upseller itemized fees + red flag, frozen job_spec
-- Eval: `npm run eval` → 5/5 PASS required before submit
-
-To “record” a live run later: export job state JSON into the same shape as `data/golden/run.json` (sessions + price_history + transcript_events + ranked_report).
-
----
-
-## 60-second demo click-path (stage)
-
-1. Open `http://localhost:3000/?replay=true`
-2. **JOB** auto-fills demo 3-ton AC replacement → calls start
-3. **CALLS:** watch Summit Air price **tick down** after “Competing bid used”; ComfortPro **declines** with callback; ValueHVAC fees **itemize**
-4. **DEAL:** green recommendation on fair quote; red **bait-price** banner on ≥30% below market (never #1); click **Listen** / **Download transcript**
-5. Optional wow: open `?vertical=movers&replay=true` — different vendors/fields, **zero code change**
-
-### Pitch numbers (from brief + HVAC demo)
-
-- Same job, wild phone spreads; sight-unseen quotes blow up  
-- Demo: **$9,400 → $7,850** because of a **logged** competing bid — not a scripted TTS play  
-- Red-flag rule: **≥30% below market = warning, not winner**
-
----
-
-## Acceptance tests (Definition of Done)
-
-1. Intake (voice or PDF) → valid job_spec → user confirms before calls  
-2. 3 sessions vs 3 counter-agents; live or replay transcripts in UI  
-3. ≥1 mid-call price drop after citing a real competing bid  
-4. Stonewaller → `documented_decline` + callback; upseller fees itemized  
-5. Report ranks, red-flags ≥30% below benchmark, transcript timestamps  
-6. `movers.json` ↔ `hvac.json` swap via `?vertical=` with zero code edits  
-
----
-
-## Scripts
-
-| Command | Purpose |
-|---------|---------|
-| `npm run dev` | Local app |
-| `npm run build` | Production build |
-| `npm run eval` | 12 acceptance assertions |
-| `npm run smoke` | Tool + ranking smoke |
-| `npm run provision` | Create/update 5 ElevenLabs agents |
-
----
-
-## Explicit exclusions
-
-No Twilio/real phones, no auth, no payments, no mobile layout, no multi-page nav, no vendor discovery API (3 vendors from config; Places stub can live as a comment in config only).
+- ElevenLabs Agents only for voice; no custom STT/TTS.
+- No auth/login for the hackathon. Recent history is anonymous, browser-local, and limited to five runs.
+- No payment, automatic booking, or purchase authorization.
+- No PSTN/Twilio in this MVP. The challenge explicitly permits counter-agents, and real-business discovery demonstrates where a production call list comes from.
