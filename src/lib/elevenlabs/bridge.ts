@@ -144,7 +144,9 @@ function extractAudioChunk(msg: JsonMsg): string | null {
 }
 
 function sendUserAudio(ws: WebSocket, audioChunk: string) {
-  sendJson(ws, { type: "user_audio_chunk", audio_chunk: audioChunk });
+  // ElevenLabs' WebSocket wire format is intentionally different from other
+  // client events: the base64 payload is the top-level property.
+  sendJson(ws, { user_audio_chunk: audioChunk });
 }
 
 /**
