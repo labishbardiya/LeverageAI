@@ -154,6 +154,8 @@ export const VerticalConfigSchema = z
           z.object({
             key: z.string().regex(/^[a-zA-Z0-9:_-]+$/),
             value: z.string().regex(/^[a-zA-Z0-9:_ -]+$/).optional(),
+            /** Apply the vertical's safe name_terms regex to this broad tag. */
+            name_match: z.boolean().optional(),
           }),
         )
         .min(1),

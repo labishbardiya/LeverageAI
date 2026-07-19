@@ -63,6 +63,23 @@ export async function getCompetingBids(
   }
 
   const excludeSession = exclude_session_id ?? session_id;
+  if (excludeSession) {
+    const current = await store.getSession(excludeSession);
+    if (!current) {
+      return {
+        ok: false,
+        code: "SESSION_NOT_FOUND",
+        error: "Current session does not exist",
+      };
+    }
+    if (current.job_id !== job_id) {
+      return {
+        ok: false,
+        code: "JOB_MISMATCH",
+        error: "Current session does not belong to this job",
+      };
+    }
+  }
   let quotes = await store.listQuotesByJobExcludingSession(
     job_id,
     excludeSession

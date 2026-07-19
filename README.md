@@ -83,8 +83,12 @@ npm run provision:verify
 | `APP_BASE_URL` | Public HTTPS app origin used by ElevenLabs tools/webhooks |
 | `TOOLS_WEBHOOK_SECRET` | Authenticates agent tool calls |
 | `ELEVENLABS_WEBHOOK_SECRET` | Verifies post-call HMAC signatures |
-| `BLOB_READ_WRITE_TOKEN` | Durable recording URLs on Vercel |
-| `GOOGLE_PLACES_API_KEY` | Optional denser discovery; OSM is the free fallback |
+| `BLOB_STORE_ID` + Vercel OIDC | Preferred short-lived authentication for durable recording URLs |
+| `BLOB_READ_WRITE_TOKEN` | Supported legacy Blob authentication fallback |
+| `OSM_NOMINATIM_URL` | OpenStreetMap location geocoding endpoint |
+| `OSM_OVERPASS_URL` | OpenStreetMap provider-search endpoint |
+| `OSM_QLEVER_URL` | OpenStreetMap Planet query fallback when Overpass is busy |
+| `OSM_USER_AGENT` | Identifies the app to OSM public services |
 
 All secrets remain in `.env.local`/deployment settings and are gitignored.
 

@@ -4,6 +4,7 @@ import JSZip from "jszip";
 import { listVerticalIds, loadVertical } from "../src/lib/config/loadVertical";
 import { extractJobSpecFromUpload } from "../src/lib/intake/extractJobSpec";
 import { validateJobSpec } from "../src/lib/intake/jobSpec";
+import { jobSpecFromVoicePayload } from "../src/lib/intake/voicePayload";
 import { questionsBeforeBooking } from "../src/lib/review/booking";
 import { assessQuoteCompleteness } from "../src/lib/review/quoteEvidence";
 import { verifyElevenLabsWebhook } from "../src/lib/security/elevenlabsWebhook";
@@ -19,7 +20,28 @@ async function main() {
     assert.ok(vertical.quote_line_items.some((item) => item.required));
     assert.ok(vertical.booking_terms.length > 0);
     assert.ok(vertical.provider_search_queries.length > 0);
+    const fromVoice = jobSpecFromVoicePayload(vertical, {
+      ...vertical.demo_defaults,
+      job_spec: {},
+    });
+    assert.equal(
+      validateJobSpec(vertical, fromVoice).ok,
+      true,
+      `${id} voice payload must populate every required config field`,
+    );
   }
+
+  const moverVoice = jobSpecFromVoicePayload(loadVertical("movers"), {
+    move_type: "local_apartment",
+    from_city: "Chicago",
+    to_city: "Evanston",
+    bedrooms: 2,
+    packing: "none",
+    urgency: "within_2_weeks",
+    zip: "60614",
+  });
+  assert.equal(moverVoice.from_city, "Chicago");
+  assert.equal(validateJobSpec("movers", moverVoice).ok, true);
 
   const extraction = await extractJobSpecFromUpload({
     vertical: "hvac",

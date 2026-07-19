@@ -371,8 +371,8 @@
   "provider_snapshot": "movers-29730.json",
   "provider_osm": {
     "tags": [
-      { "key": "shop", "value": "storage_rental" },
-      { "key": "office", "value": "company" }
+      { "key": "shop", "value": "storage_rental", "name_match": true },
+      { "key": "office", "value": "moving_company" }
     ],
     "name_terms": ["Moving", "Movers", "Relocation", "Van Lines"]
   },

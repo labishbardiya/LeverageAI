@@ -14,7 +14,8 @@ Set these in `.env.local` without committing them:
 ELEVENLABS_API_KEY=...
 APP_BASE_URL=https://your-public-host
 DATABASE_URL=...
-BLOB_READ_WRITE_TOKEN=... # recommended for durable audio
+BLOB_STORE_ID=... # recommended with Vercel OIDC for durable audio
+# BLOB_READ_WRITE_TOKEN=... # supported legacy fallback
 ```
 
 ## One-command provisioning
@@ -26,13 +27,13 @@ npm run provision:verify
 
 The first command:
 
-1. validates the selected conversational model against `/v1/convai/llm/list` (default `gemini-2.5-flash`, override with `ELEVENLABS_LLM_ID`);
+1. validates the selected conversational model against `/v1/convai/llm/list` (prefers `gemini-3.5-flash`, falls back to `gemini-2.5-flash`, and accepts an `ELEVENLABS_LLM_ID` override);
 2. creates or updates the five workspace webhook tools from `agents/tool-schemas.json`;
 3. generates `TOOLS_WEBHOOK_SECRET` when absent and attaches it as `x-tools-secret`;
 4. creates or updates `leverageai-intake`, `leverageai-negotiator`, `leverageai-tough`, `leverageai-stonewaller`, and `leverageai-upseller`;
 5. attaches tools through `conversation_config.agent.prompt.tool_ids`;
 6. creates an HMAC workspace webhook at `/api/webhooks/elevenlabs`, enables transcript/audio delivery and retry support;
-7. verifies exact remote prompts, exact tool IDs, and workspace webhook settings;
+7. enables focus and prompt-injection guardrails and verifies exact remote prompts, exact tool IDs, model, guardrails, and workspace webhook settings;
 8. writes agent IDs and generated secrets to `.env.local` without printing them.
 
 The command is idempotent by `leverageai-` names. If a matching post-call webhook already exists but its original HMAC secret is lost, delete that webhook in ElevenLabs and rerun so a new secret can be captured.
@@ -59,13 +60,15 @@ ElevenLabs sends `post_call_transcription` and `post_call_audio` to `/api/webhoo
 - stores the negotiator-side recording as the canonical evidence track;
 - never accepts an unsigned webhook.
 
-Set `BLOB_READ_WRITE_TOKEN` in deployment for durable audio. Local development falls back to `public/recordings`; Vercel without Blob records an explicit transcript-only note.
+Connect the Vercel Blob store so `BLOB_STORE_ID` and Vercel's rotating OIDC token are available for durable audio. `BLOB_READ_WRITE_TOKEN` remains a supported legacy fallback. Local development falls back to `public/recordings`; Vercel without Blob records an explicit transcript-only note.
 
 ## Verification and failure modes
 
 ```bash
 npm run provision:verify
 npm test
+npm run reliability
+npm run agent-tests:run
 npm run eval
 npm run smoke
 npm run build

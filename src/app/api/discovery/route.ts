@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { z } from "zod";
 import {
   enrichFromSnapshotPlace,
-  fetchPlaceDetails,
   type PlaceDetails,
 } from "@/lib/places/details";
 import {
@@ -66,74 +65,12 @@ function loadSnapshotFallback(vertical: string): PlaceDetails[] {
   }
 }
 
-async function searchGooglePlaces(
-  textQuery: string
-): Promise<PlaceDetails[]> {
-  const key = process.env.GOOGLE_PLACES_API_KEY?.trim();
-  if (!key) return [];
-  const res = await fetch(
-    "https://places.googleapis.com/v1/places:searchText",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask":
-          "places.id,places.displayName,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.formattedAddress,places.location,places.googleMapsUri",
-      },
-      body: JSON.stringify({ textQuery }),
-      signal: AbortSignal.timeout(5_000),
-    }
-  ).catch(() => null);
-  if (!res?.ok) {
-    if (res) console.warn("[discovery] Places searchText", res.status);
-    return [];
-  }
-  const data = (await res.json()) as {
-    places?: Array<Record<string, unknown>>;
-  };
-  const list: PlaceDetails[] = [];
-  for (const p of data.places || []) {
-    const id = typeof p.id === "string" ? p.id : null;
-    if (!id) continue;
-    const detailed = await fetchPlaceDetails(id);
-    if (detailed) {
-      list.push(detailed);
-      continue;
-    }
-    const loc = p.location as
-      | { latitude?: number; longitude?: number }
-      | undefined;
-    list.push(
-      enrichFromSnapshotPlace(
-        {
-          displayName:
-            typeof p.displayName === "object" && p.displayName
-              ? (p.displayName as { text?: string }).text
-              : p.displayName,
-          rating: p.rating,
-          userRatingCount: p.userRatingCount,
-          nationalPhoneNumber: p.nationalPhoneNumber,
-          formattedAddress: p.formattedAddress,
-          place_id: id,
-          googleMapsUri: p.googleMapsUri,
-          location: loc
-            ? { lat: loc.latitude, lng: loc.longitude }
-            : undefined,
-        },
-        list.length
-      )
-    );
-  }
-  return list;
-}
-
 /**
  * POST /api/discovery
  * Live discovery from user location text / ZIP.
- * 1) Google Places (New) when GOOGLE_PLACES_API_KEY set
- * 2) else OpenStreetMap Overpass near geocoded lat/lng (real-time, free)
- * 3) offline snapshot only if network fails
+ * 1) OpenStreetMap Nominatim resolves the user location.
+ * 2) OpenStreetMap Overpass finds config-matched providers nearby.
+ * 3) An offline snapshot is used only when the location cannot be resolved.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -196,25 +133,18 @@ export async function POST(req: NextRequest) {
     let detailsList: PlaceDetails[] = [];
     let source = "";
 
-    // 1) Google Places when configured
-    detailsList = await searchGooglePlaces(textQuery);
-    if (detailsList.length > 0) {
-      source = "Google Places API (New) — live searchText + Place Details";
-    }
-
-    // 2) Live OSM Overpass near geocoded point (real-time, free)
-    if (detailsList.length === 0 && geo) {
-      detailsList = await searchOverpassNear(vertical, geo.lat, geo.lng, 25000);
-      if (detailsList.length === 0) {
-        // Wider radius second try
-        detailsList = await searchOverpassNear(vertical, geo.lat, geo.lng, 45000);
-      }
+    // Live OSM Overpass near the Nominatim-resolved point.
+    if (geo) {
+      // One bounded request per user query respects public Overpass cooldowns.
+      detailsList = await searchOverpassNear(vertical, geo.lat, geo.lng, 30000);
       if (detailsList.length > 0) {
-        source = "OpenStreetMap Overpass — live near your location";
+        source = detailsList[0]?.source.includes("QLever")
+          ? "OpenStreetMap QLever — live OSM Planet search"
+          : "OpenStreetMap Overpass — live near your location";
       }
     }
 
-    // 3) Offline snapshot ONLY when we could not geocode at all.
+    // Offline snapshot ONLY when we could not geocode at all.
     // Never mix Charlotte snapshot with a Chicago geo — that was the hardcode bug.
     if (detailsList.length === 0 && !geo) {
       detailsList = loadSnapshotFallback(vertical);
@@ -234,7 +164,7 @@ export async function POST(req: NextRequest) {
           top3: [],
           live: false,
           error:
-            "We found your area but no shops returned from live search. Add GOOGLE_PLACES_API_KEY for denser GMB results, or try a nearby ZIP.",
+            "We found your area but OpenStreetMap has no matching providers nearby. Try a nearby ZIP or city.",
           code: "NO_PLACES_IN_AREA",
       };
       if (cacheKey) {
@@ -275,10 +205,7 @@ export async function POST(req: NextRequest) {
         : null,
       query: textQuery,
       source,
-      attribution:
-        source.includes("Google")
-          ? "Place data © Google. Ratings and reviews from Google."
-          : "Map data © OpenStreetMap contributors.",
+      attribution: "Map data © OpenStreetMap contributors (ODbL).",
       places: ranked.map((r) => ({
         ...r.provider,
         provider_score: r.score.total,

@@ -4,6 +4,10 @@
  */
 import { tryGetAgentId, getAllConfiguredAgentIds } from "./env";
 import { hasDatabaseUrl } from "@/lib/db/pool";
+import {
+  blobStorageMode,
+  hasDurableBlobStorage,
+} from "@/lib/storage/blobAuth";
 
 export function isLiveModeEnabled(): boolean {
   if (!process.env.ELEVENLABS_API_KEY || !hasDatabaseUrl()) return false;
@@ -32,8 +36,7 @@ export function liveModeStatus() {
     has_post_call_auth: Boolean(
       process.env.ELEVENLABS_WEBHOOK_SECRET?.trim(),
     ),
-    has_durable_recordings: Boolean(
-      process.env.BLOB_READ_WRITE_TOKEN?.trim(),
-    ),
+    has_durable_recordings: hasDurableBlobStorage(),
+    recording_storage: blobStorageMode(),
   };
 }

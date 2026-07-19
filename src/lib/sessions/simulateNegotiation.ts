@@ -208,6 +208,7 @@ async function runToughTrack(
     currency: "USD",
     line_items: configuredLineItems(toughFinal, vertical),
     grand_total: toughFinal,
+    is_update: true,
   });
   const closeTough = await closeSession({
     session_id: tough.id,
@@ -276,6 +277,7 @@ async function runUpsellTrack(
     currency: "USD",
     line_items: configuredLineItems(upsellTotal, vertical),
     grand_total: upsellTotal,
+    is_update: true,
   });
   await recordToolCall({
     session_id: upsell.id,

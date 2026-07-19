@@ -1,11 +1,13 @@
 /**
  * Fetch conversation audio after a live session.
- * Priority: @vercel/blob put() if BLOB_READ_WRITE_TOKEN → local /public/recordings → transcript-only note.
+ * Priority: @vercel/blob via short-lived Vercel OIDC or a legacy read/write
+ * token → local /public/recordings → transcript-only note.
  */
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getElevenLabsApiKey } from "./env";
 import { getStore } from "@/lib/db";
+import { blobStorageMode } from "@/lib/storage/blobAuth";
 
 const API = "https://api.elevenlabs.io/v1";
 
@@ -13,14 +15,17 @@ async function putVercelBlob(
   sessionId: string,
   buf: Buffer
 ): Promise<string | null> {
+  const mode = blobStorageMode();
+  if (!mode) return null;
   const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
-  if (!token) return null;
   try {
     const { put } = await import("@vercel/blob");
     const blob = await put(`recordings/${sessionId}.mp3`, buf, {
       access: "public",
-      token,
       contentType: "audio/mpeg",
+      ...(mode === "read-write-token"
+        ? { token }
+        : { storeId: process.env.BLOB_STORE_ID!.trim() }),
     });
     return blob.url;
   } catch (e) {
@@ -57,7 +62,7 @@ export async function storeRecordingBuffer(
 
   await store.updateSession(sessionId, {
     recording_note:
-      "Transcript only - set BLOB_READ_WRITE_TOKEN for durable audio storage",
+      "Transcript only - connect Vercel Blob OIDC or set BLOB_READ_WRITE_TOKEN for durable audio storage",
   });
   return null;
 }
@@ -94,7 +99,7 @@ export async function fetchAndStoreRecording(
       audio_url = await storeRecordingBuffer(sessionId, buf);
       recording_note = audio_url
         ? null
-        : "Transcript only - set BLOB_READ_WRITE_TOKEN for audio on Vercel";
+        : "Transcript only - connect Vercel Blob OIDC or set BLOB_READ_WRITE_TOKEN for audio on Vercel";
     }
   } catch (e) {
     console.warn("[recordings] audio fetch failed", e);

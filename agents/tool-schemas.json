@@ -43,9 +43,9 @@
               "type": "object",
               "required": ["label", "amount"],
               "properties": {
-                "label": { "type": "string" },
-                "amount": { "type": "number" },
-                "optional": { "type": "boolean" }
+                "label": { "type": "string", "description": "Vendor-stated fee category, using a configured quote category where possible." },
+                "amount": { "type": "number", "description": "Exact amount stated by the vendor for this line." },
+                "optional": { "type": "boolean", "description": "True only when the vendor explicitly says this amount is optional or excluded." }
               },
               "additionalProperties": false
             }
@@ -96,7 +96,8 @@
           "session_id": { "type": "string", "description": "Current session UUID from dynamic variables." },
           "outcome_type": {
             "type": "string",
-            "enum": ["itemized_quote", "callback_commitment", "documented_decline"]
+            "enum": ["itemized_quote", "callback_commitment", "documented_decline"],
+            "description": "Exactly one terminal outcome. itemized_quote requires a complete logged quote; callback_commitment requires a specific window."
           },
           "callback_window": { "type": "string", "description": "Required when a callback or visit was offered." },
           "summary": { "type": "string", "description": "One factual sentence explaining the terminal outcome." }

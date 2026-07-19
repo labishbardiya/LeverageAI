@@ -8,6 +8,7 @@ import {
 import type { JobSpec } from "@/lib/types";
 import { loadVertical } from "@/lib/config/loadVertical";
 import { validateJobSpec } from "@/lib/intake/jobSpec";
+import { jobSpecFromVoicePayload } from "@/lib/intake/voicePayload";
 
 /**
  * POST /api/tools/submit_spec
@@ -51,24 +52,10 @@ export async function POST(req: NextRequest) {
     const vertical = b.vertical || "hvac";
     const verticalConfig = loadVertical(vertical);
 
-    const job_spec: JobSpec = {
-      ...(b.job_spec || {}),
-    };
-    if (b.system_type != null) job_spec.system_type = b.system_type;
-    if (b.tonnage != null) job_spec.tonnage = b.tonnage;
-    if (b.home_sqft != null) job_spec.home_sqft = b.home_sqft;
-    else if (b.sqft != null) job_spec.home_sqft = b.sqft;
-    if (b.symptom != null) job_spec.symptom = b.symptom;
-    if (b.ductwork != null) job_spec.ductwork = b.ductwork;
-    if (b.urgency != null) job_spec.urgency = b.urgency;
-    if (b.zip != null) job_spec.zip = b.zip;
-    if (b.notes != null) job_spec.notes = b.notes;
-    if (b.job_type != null) job_spec.job_type = b.job_type;
-    if (b.job_kind != null) job_spec.job_kind = b.job_kind;
-    if (!job_spec.job_type && !job_spec.job_kind) {
-      job_spec.job_type = verticalConfig.default_job_type;
-      job_spec.job_kind = verticalConfig.default_job_type;
-    }
+    const job_spec: JobSpec = jobSpecFromVoicePayload(
+      verticalConfig,
+      b as Record<string, unknown>,
+    );
 
     const target = await getIntakeDraft(b.intake_id);
     if (!target || target.vertical !== vertical) {

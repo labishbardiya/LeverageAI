@@ -224,9 +224,12 @@
   "provider_snapshot": "medical-imaging-28202.json",
   "provider_osm": {
     "tags": [
+      { "key": "healthcare", "value": "medical_imaging" },
       { "key": "healthcare", "value": "radiology" },
-      { "key": "amenity", "value": "clinic" },
-      { "key": "amenity", "value": "hospital" }
+      { "key": "healthcare:speciality", "value": "radiology" },
+      { "key": "healthcare:imaging:mri", "value": "yes" },
+      { "key": "amenity", "value": "clinic", "name_match": true },
+      { "key": "amenity", "value": "hospital", "name_match": true }
     ],
     "name_terms": ["MRI", "Imaging", "Radiology", "Diagnostic"]
   },

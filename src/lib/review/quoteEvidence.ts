@@ -20,7 +20,12 @@ export function assessQuoteCompleteness(
   vertical: VerticalConfig,
   lineItems: LineItem[],
 ): QuoteCompleteness {
-  const labels = lineItems.map((line) => normalized(line.label)).join(" | ");
+  // Optional/excluded prices are evidence, but they do not prove that a
+  // required category is included in the committed total.
+  const labels = lineItems
+    .filter((line) => line.optional !== true)
+    .map((line) => normalized(line.label))
+    .join(" | ");
   const required = vertical.quote_line_items.filter((item) => item.required);
   const covered = required.filter((item) =>
     [item.label, item.id, ...item.aliases]

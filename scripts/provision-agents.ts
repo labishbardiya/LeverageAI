@@ -63,28 +63,28 @@ const AGENTS: Array<{
     // The bridge sends one scoped kickoff after both sockets initialize. A
     // second automatic greeting causes cross-talk and duplicate openings.
     firstMessage: "",
-    temperature: 0.15,
+    temperature: 0.1,
   },
   {
     slot: "tough",
     name: `${PREFIX}tough`,
     promptPath: "agents/prompts/counter-agents/tough.md",
     firstMessage: "",
-    temperature: 0.25,
+    temperature: 0.15,
   },
   {
     slot: "stonewaller",
     name: `${PREFIX}stonewaller`,
     promptPath: "agents/prompts/counter-agents/stonewaller.md",
     firstMessage: "",
-    temperature: 0.2,
+    temperature: 0.1,
   },
   {
     slot: "upseller",
     name: `${PREFIX}upseller`,
     promptPath: "agents/prompts/counter-agents/upseller.md",
     firstMessage: "",
-    temperature: 0.3,
+    temperature: 0.15,
   },
 ];
 
@@ -213,6 +213,17 @@ function webhookToolConfig(
   };
 }
 
+function responseMocks(name: string): Array<{ mock_result: string }> {
+  const responses: Record<string, Record<string, unknown>> = {
+    submit_spec: { ok: true, status: "filled", message: "Specification saved." },
+    log_quote: { ok: true, quote_id: "test-quote", accepted: true },
+    get_competing_bids: { ok: true, bids: [], count: 0 },
+    lookup_benchmark: { ok: true, low: 6500, mid: 8000, high: 9500 },
+    close_session: { ok: true, status: "complete" },
+  };
+  return [{ mock_result: JSON.stringify(responses[name] || { ok: true }) }];
+}
+
 async function upsertTools(
   key: string,
   definitions: ToolDefinition[],
@@ -232,8 +243,12 @@ async function upsertTools(
     const remote = existing
       ? await api<RemoteTool>(key, "PATCH", `/convai/tools/${existing.id}`, {
           tool_config,
+          response_mocks: responseMocks(definition.name),
         })
-      : await api<RemoteTool>(key, "POST", "/convai/tools", { tool_config });
+      : await api<RemoteTool>(key, "POST", "/convai/tools", {
+          tool_config,
+          response_mocks: responseMocks(definition.name),
+        });
     if (!remote.id) throw new Error(`No tool id returned for ${definition.name}`);
     ids.set(definition.name, remote.id);
     console.log(`${existing ? "updated" : "created"} tool ${definition.name}`);
@@ -320,20 +335,32 @@ async function provisionPostCallWebhook(
 }
 
 async function selectLlm(key: string): Promise<string> {
-  const requested = process.env.ELEVENLABS_LLM_ID?.trim() || "gemini-2.5-flash";
+  const requested = process.env.ELEVENLABS_LLM_ID?.trim();
   const response = await api<{ llms?: Array<{ llm?: string }> }>(
     key,
     "GET",
     "/convai/llm/list",
   );
   const available = new Set((response.llms || []).map((row) => row.llm).filter(Boolean));
-  if (!available.has(requested)) {
+  if (requested && !available.has(requested)) {
     throw new Error(
       `ELEVENLABS_LLM_ID ${requested} is unavailable in this workspace. ` +
         `Choose one returned by GET /v1/convai/llm/list.`,
     );
   }
-  return requested;
+  if (requested) return requested;
+
+  // Prefer a current low-latency model, then fall back to the proven model.
+  // ElevenLabs adds its own provider cascade for transient model failures.
+  const selected = ["gemini-3.5-flash", "gemini-2.5-flash"].find((model) =>
+    available.has(model),
+  );
+  if (!selected) {
+    throw new Error(
+      "Neither gemini-3.5-flash nor gemini-2.5-flash is available in this workspace. Set ELEVENLABS_LLM_ID to an available low-latency model.",
+    );
+  }
+  return selected;
 }
 
 function dynamicPlaceholders(slot: Slot): Record<string, string> {
@@ -396,6 +423,13 @@ async function upsertAgents(
     const body = {
       name: definition.name,
       tags: ["leverageai", "hack-nation", definition.slot],
+      platform_settings: {
+        guardrails: {
+          version: "1",
+          focus: { is_enabled: true },
+          prompt_injection: { is_enabled: true },
+        },
+      },
       conversation_config: {
         agent: {
           first_message: definition.firstMessage,
@@ -439,13 +473,27 @@ async function verifyAgents(
   ids: Partial<Record<Slot, string>>,
   definitions: ToolDefinition[],
   toolIds: Map<string, string>,
+  expectedLlm: string,
 ): Promise<void> {
   for (const definition of AGENTS) {
     const id = ids[definition.slot];
     if (!id) throw new Error(`Missing id for ${definition.slot}`);
     const remote = await api<{
       conversation_config?: {
-        agent?: { prompt?: { prompt?: string; tool_ids?: string[] } };
+        agent?: {
+          prompt?: {
+            prompt?: string;
+            tool_ids?: string[];
+            llm?: string;
+            temperature?: number;
+          };
+        };
+      };
+      platform_settings?: {
+        guardrails?: {
+          focus?: { is_enabled?: boolean };
+          prompt_injection?: { is_enabled?: boolean };
+        };
       };
     }>(key, "GET", `/convai/agents/${id}`);
     const localPrompt = readFileSync(join(process.cwd(), definition.promptPath), "utf8");
@@ -464,8 +512,21 @@ async function verifyAgents(
         `Tool mismatch for ${definition.slot}: expected ${expectedTools.length} exact tool ids, got ${actualTools.length}`,
       );
     }
+    if (remote.conversation_config?.agent?.prompt?.llm !== expectedLlm) {
+      throw new Error(
+        `Model mismatch for ${definition.slot}: expected ${expectedLlm}, got ${remote.conversation_config?.agent?.prompt?.llm || "missing"}`,
+      );
+    }
+    if (
+      remote.platform_settings?.guardrails?.focus?.is_enabled !== true ||
+      remote.platform_settings?.guardrails?.prompt_injection?.is_enabled !== true
+    ) {
+      throw new Error(
+        `Required Focus/prompt-injection guardrails are disabled for ${definition.slot}`,
+      );
+    }
     console.log(
-      `verified ${definition.slot}: prompt ${promptHash(remotePrompt)}, ${actualTools.length} tools`,
+      `verified ${definition.slot}: prompt ${promptHash(remotePrompt)}, ${actualTools.length} tools, ${expectedLlm}, guardrails on`,
     );
   }
 }
@@ -553,8 +614,9 @@ async function main(): Promise<void> {
   const verifyOnly = process.argv.includes("--verify");
   if (verifyOnly) {
     const baseUrl = requireEnv("APP_BASE_URL");
+    const llm = await selectLlm(key);
     const tools = await listToolIds(key, definitions);
-    await verifyAgents(key, envIds(), definitions, tools);
+    await verifyAgents(key, envIds(), definitions, tools, llm);
     await verifyPostCallWebhook(key, baseUrl);
     return;
   }
@@ -586,7 +648,7 @@ async function main(): Promise<void> {
     toolsSecret,
   );
   const agents = await upsertAgents(key, tools, definitions, llm);
-  await verifyAgents(key, agents, definitions, tools);
+  await verifyAgents(key, agents, definitions, tools, llm);
   const postCall = await provisionPostCallWebhook(key, baseUrl);
   const webhookSecret =
     postCall.webhookSecret || process.env.ELEVENLABS_WEBHOOK_SECRET?.trim();

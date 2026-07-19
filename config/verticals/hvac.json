@@ -456,9 +456,7 @@
   "provider_osm": {
     "tags": [
       { "key": "craft", "value": "hvac" },
-      { "key": "shop", "value": "hvac" },
-      { "key": "craft", "value": "plumber" },
-      { "key": "craft", "value": "electrician" }
+      { "key": "shop", "value": "hvac" }
     ],
     "name_terms": ["HVAC", "Heating", "Air Conditioning", "Cooling", "Mechanical"]
   },

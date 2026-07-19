@@ -11,10 +11,14 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx scripts/test-core.ts",
+    "reliability": "tsx scripts/test-reliability.ts",
     "eval": "tsx scripts/eval.ts",
     "smoke": "tsx scripts/smoke-tools.ts",
     "provision": "tsx scripts/provision-agents.ts",
-    "provision:verify": "tsx scripts/provision-agents.ts --verify"
+    "provision:verify": "tsx scripts/provision-agents.ts --verify",
+    "agent-tests:provision": "tsx scripts/provision-agent-tests.ts",
+    "agent-tests:verify": "tsx scripts/provision-agent-tests.ts --verify",
+    "agent-tests:run": "tsx scripts/provision-agent-tests.ts --run --repeat=3"
   },
   "dependencies": {
     "@vercel/blob": "^2.6.1",

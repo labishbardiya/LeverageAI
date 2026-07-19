@@ -19,8 +19,8 @@ import {
 } from "@/lib/review/quoteEvidence";
 
 const lineItemSchema = z.object({
-  label: z.string().min(1),
-  amount: z.number().finite(),
+  label: z.string().trim().min(1).max(120),
+  amount: z.number().finite().min(-100_000_000).max(100_000_000),
   optional: z.boolean().optional(),
 });
 
@@ -84,9 +84,10 @@ export const logQuoteSchema = z.object({
   vendor_id: z.string().min(1),
   line_items: z
     .array(lineItemSchema)
-    .min(1, "line_items must not be empty for itemized quote"),
-  total: z.number().finite(),
-  notes: z.string().optional(),
+    .min(1, "line_items must not be empty for itemized quote")
+    .max(50, "line_items must contain at most 50 entries"),
+  total: z.number().finite().positive().max(100_000_000),
+  notes: z.string().max(1_000).optional(),
   company_name: z.string().optional(),
   currency: z.string().optional(),
   is_update: z.boolean().optional(),
@@ -129,6 +130,14 @@ export async function logQuote(raw: unknown): Promise<LogQuoteResult> {
     };
   }
 
+  if (session.status === "closed" || session.outcome_type != null) {
+    return {
+      ok: false,
+      code: "SESSION_CLOSED",
+      error: "Cannot log a quote after the session has closed",
+    };
+  }
+
   const job = await store.getJob(input.job_id);
   if (!job) {
     return {
@@ -156,12 +165,62 @@ export async function logQuote(raw: unknown): Promise<LogQuoteResult> {
     }
   }
 
+  const normalizedLabels = input.line_items.map((line) =>
+    line.label.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(),
+  );
+  if (new Set(normalizedLabels).size !== normalizedLabels.length) {
+    return {
+      ok: false,
+      code: "DUPLICATE_LINE_ITEM",
+      error: "line_items must not contain duplicate labels",
+    };
+  }
+
   const sum = input.line_items.reduce((acc, li) => acc + li.amount, 0);
   if (Math.abs(sum - input.total) > TOTAL_TOLERANCE) {
     return {
       ok: false,
       code: "TOTAL_MISMATCH",
       error: `total ${input.total} does not match line_items sum ${sum} (tolerance $${TOTAL_TOLERANCE})`,
+    };
+  }
+
+  const existingQuotes = (await store.listQuotesByJob(input.job_id)).filter(
+    (quote) => quote.session_id === input.session_id,
+  );
+  const latest = existingQuotes.at(-1);
+  if (latest) {
+    const sameLines =
+      JSON.stringify(latest.line_items) ===
+      JSON.stringify(
+        input.line_items.map(({ label, amount, optional }) => ({
+          label,
+          amount,
+          ...(optional !== undefined ? { optional } : {}),
+        })),
+      );
+    if (latest.total === input.total && sameLines) {
+      return {
+        ok: true,
+        quote: latest,
+        completeness: assessQuoteCompleteness(
+          loadVertical(job.vertical),
+          latest.line_items,
+        ),
+      };
+    }
+    if (input.is_update !== true) {
+      return {
+        ok: false,
+        code: "UPDATE_FLAG_REQUIRED",
+        error: "A prior quote exists; set is_update=true for a changed offer",
+      };
+    }
+  } else if (input.is_update === true) {
+    return {
+      ok: false,
+      code: "INITIAL_QUOTE_REQUIRED",
+      error: "is_update=true requires a previously logged quote",
     };
   }
 

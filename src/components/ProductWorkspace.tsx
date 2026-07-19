@@ -427,6 +427,22 @@ function readRecentRuns(): RecentRun[] {
   }
 }
 
+function jobSpecToPrompt(spec: JobSpec): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(spec)) {
+    if (
+      value == null ||
+      value === "" ||
+      key === "job_type" ||
+      key === "job_kind"
+    ) {
+      continue;
+    }
+    parts.push(`${key.replace(/_/g, " ")}: ${String(value)}`);
+  }
+  return parts.join(". ") + (parts.length ? "." : "");
+}
+
 export function ProductWorkspace() {
   const [mode, setMode] = useState<ModeId>("hvac");
   const [modeOpen, setModeOpen] = useState(false);
@@ -463,6 +479,7 @@ export function ProductWorkspace() {
   const pollJobIdRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const modeRef = useRef<HTMLDivElement>(null);
+  const voiceFinalizingRef = useRef(false);
 
   const modeMeta = MODES.find((m) => m.id === mode) || MODES[0];
   const natures = useMemo(() => naturesFromVertical(vertical), [vertical]);
@@ -942,18 +959,10 @@ export function ProductWorkspace() {
     }
   };
 
-  const jobSpecToPrompt = (spec: JobSpec): string => {
-    const parts: string[] = [];
-    for (const [k, v] of Object.entries(spec)) {
-      if (v == null || v === "" || k === "job_type" || k === "job_kind") continue;
-      parts.push(`${k.replace(/_/g, " ")}: ${String(v)}`);
-    }
-    return parts.join(". ") + (parts.length ? "." : "");
-  };
-
   const onTalk = async () => {
     if (!vertical) return;
     setError(null);
+    voiceFinalizingRef.current = false;
     setTalkOpen(true);
     setStatus("Speak with Leverage · we close the deal for you");
     try {
@@ -983,7 +992,9 @@ export function ProductWorkspace() {
     }
   };
 
-  // Voice → fill the input box (do not auto-start; user reviews then Send)
+  // Voice already returns a server-validated structured specification.
+  // Create the review job directly instead of converting it back to prose and
+  // running a lossy second extraction pass.
   useEffect(() => {
     if (!intakeId || !vertical || stage === "working") return;
     let cancelled = false;
@@ -999,19 +1010,61 @@ export function ProductWorkspace() {
           job_spec?: JobSpec | null;
         };
         if (cancelled) return;
-        if (data.status === "filled" && data.job_spec) {
+        if (
+          data.status === "filled" &&
+          data.job_spec &&
+          !voiceFinalizingRef.current
+        ) {
+          voiceFinalizingRef.current = true;
           clearInterval(id);
           setTalkOpen(false);
           const filled = { ...data.job_spec };
-          const text = jobSpecToPrompt(filled);
-          setPrompt(
-            text ||
-              Object.values(filled)
-                .filter(Boolean)
-                .join(" · "),
-          );
-          setStatus("Multi-agent mode · ready to send");
-          setError(null);
+          try {
+            const createRes = await fetch("/api/jobs", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                vertical: vertical.id,
+                job_spec: filled,
+              }),
+            });
+            const created = (await createRes.json().catch(() => ({}))) as {
+              job?: { id?: string; job_spec?: JobSpec };
+              error?: string;
+            };
+            if (!createRes.ok || !created.job?.id) {
+              throw new Error(
+                created.error || "Voice details could not be prepared for review",
+              );
+            }
+            const reviewedSpec = created.job.job_spec || filled;
+            setPrompt(jobSpecToPrompt(reviewedSpec));
+            setPendingJob({ id: created.job.id, spec: reviewedSpec });
+            setFieldIssues({});
+            setState(null);
+            setStage("compose");
+            setBusy(false);
+            setFile(null);
+            setStatusStep(null);
+            setStatus("Review the voice details below before negotiations start.");
+            setError(null);
+            setIntakeId(null);
+            rememberRun({
+              job_id: created.job.id,
+              vertical: vertical.id as ModeId,
+              created_at: new Date().toISOString(),
+              status: "review",
+              summary: `${vertical.displayName || vertical.label || vertical.id} voice request`,
+            });
+          } catch (voiceError) {
+            voiceFinalizingRef.current = false;
+            setError(
+              voiceError instanceof Error
+                ? voiceError.message
+                : "Voice details could not be prepared for review",
+            );
+            setStatus(null);
+          }
         }
       } catch {
         /* ignore */
@@ -1021,7 +1074,7 @@ export function ProductWorkspace() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [intakeId, vertical, stage]);
+  }, [intakeId, vertical, stage, rememberRun]);
 
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
@@ -1402,7 +1455,7 @@ export function ProductWorkspace() {
                           <select
                             value={value == null ? "" : String(value)}
                             onChange={(event) => update(event.target.value)}
-                            className={`mt-1 w-full rounded-xl border bg-white/55 px-3 py-2 text-[13px] outline-none ${
+                            className={`mt-1 h-11 w-full rounded-xl border bg-white/55 px-3 text-[13px] outline-none ${
                               issue ? "border-[var(--danger)]" : "border-white/60"
                             }`}
                           >
@@ -1420,7 +1473,7 @@ export function ProductWorkspace() {
                             value={value == null ? "" : String(value)}
                             onChange={(event) => update(event.target.value)}
                             rows={2}
-                            className={`mt-1 w-full resize-y rounded-xl border bg-white/55 px-3 py-2 text-[13px] outline-none ${
+                            className={`mt-1 min-h-20 w-full resize-y rounded-xl border bg-white/55 px-3 py-2 text-[13px] outline-none ${
                               issue ? "border-[var(--danger)]" : "border-white/60"
                             }`}
                           />
@@ -1429,7 +1482,7 @@ export function ProductWorkspace() {
                             type={question.type === "number" ? "number" : "text"}
                             value={value == null ? "" : String(value)}
                             onChange={(event) => update(event.target.value)}
-                            className={`mt-1 w-full rounded-xl border bg-white/55 px-3 py-2 text-[13px] outline-none ${
+                            className={`mt-1 h-11 w-full rounded-xl border bg-white/55 px-3 text-[13px] outline-none ${
                               issue ? "border-[var(--danger)]" : "border-white/60"
                             }`}
                           />

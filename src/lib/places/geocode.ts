@@ -11,7 +11,9 @@ export type GeoPoint = {
   city?: string;
 };
 
-const UA = "LeverageAI/1.0 (hackathon; contact: leverageai)";
+const DEFAULT_NOMINATIM_URL = "https://nominatim.openstreetmap.org";
+const DEFAULT_UA =
+  "LeverageAI/1.0 (contact: https://leverageai-tawny.vercel.app)";
 
 /** Extract US ZIP or city-ish location tokens from free text. */
 export function extractLocationHints(text: string): {
@@ -42,7 +44,9 @@ export async function geocodeLocation(
 ): Promise<GeoPoint | null> {
   const q = query.trim();
   if (!q) return null;
-  const url = new URL("https://nominatim.openstreetmap.org/search");
+  const baseUrl =
+    process.env.OSM_NOMINATIM_URL?.trim() || DEFAULT_NOMINATIM_URL;
+  const url = new URL("/search", baseUrl.replace(/\/$/, ""));
   url.searchParams.set("q", q);
   url.searchParams.set("format", "json");
   url.searchParams.set("limit", "1");
@@ -50,7 +54,10 @@ export async function geocodeLocation(
   url.searchParams.set("countrycodes", "us");
 
   const res = await fetch(url.toString(), {
-    headers: { "User-Agent": UA, Accept: "application/json" },
+    headers: {
+      "User-Agent": process.env.OSM_USER_AGENT?.trim() || DEFAULT_UA,
+      Accept: "application/json",
+    },
     next: { revalidate: 3600 },
     signal: AbortSignal.timeout(3_500),
   } as RequestInit).catch(() => null);

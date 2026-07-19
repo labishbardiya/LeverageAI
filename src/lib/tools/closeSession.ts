@@ -87,6 +87,17 @@ export async function closeSession(raw: unknown): Promise<CloseSessionResult> {
     };
   }
 
+  if (
+    outcome_type === "callback_commitment" &&
+    !callback_window?.trim()
+  ) {
+    return {
+      ok: false,
+      code: "CALLBACK_WINDOW_REQUIRED",
+      error: "callback_commitment requires a specific callback or visit window",
+    };
+  }
+
   // The challenge's stonewaller track is a documented refusal with the offered
   // callback preserved as evidence, not a successful price outcome.
   if (existing.vendor_id === "stonewaller") {

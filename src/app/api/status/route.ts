@@ -8,7 +8,22 @@ export async function GET() {
     ok: true,
     live_mode: isLiveModeEnabled(),
     database: hasDatabaseUrl(),
-    places: Boolean(process.env.GOOGLE_PLACES_API_KEY?.trim()),
+    places: true,
+    discovery_provider: "openstreetmap",
+    osm: {
+      nominatim: Boolean(
+        process.env.OSM_NOMINATIM_URL?.trim() ||
+          "https://nominatim.openstreetmap.org",
+      ),
+      overpass: Boolean(
+        process.env.OSM_OVERPASS_URL?.trim() ||
+          "https://overpass-api.de/api/interpreter",
+      ),
+      qlever: Boolean(
+        process.env.OSM_QLEVER_URL?.trim() ||
+          "https://qlever.dev/api/osm-planet",
+      ),
+    },
     details: liveModeStatus(),
   });
 }
