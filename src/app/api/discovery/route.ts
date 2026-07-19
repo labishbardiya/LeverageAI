@@ -181,19 +181,44 @@ export async function POST(req: NextRequest) {
       source = "Google Places API (New) — live searchText + Place Details";
     }
 
-    // 2) Live OSM Overpass near geocoded point
+    // 2) Live OSM Overpass near geocoded point (real-time, free)
     if (detailsList.length === 0 && geo) {
-      detailsList = await searchOverpassNear(vertical, geo.lat, geo.lng);
+      detailsList = await searchOverpassNear(vertical, geo.lat, geo.lng, 25000);
+      if (detailsList.length === 0) {
+        // Wider radius second try
+        detailsList = await searchOverpassNear(vertical, geo.lat, geo.lng, 45000);
+      }
       if (detailsList.length > 0) {
         source = "OpenStreetMap Overpass — live near your location";
       }
     }
 
-    // 3) Soft fallback only if live paths failed
-    if (detailsList.length === 0) {
+    // 3) Offline snapshot ONLY when we could not geocode at all.
+    // Never mix Charlotte snapshot with a Chicago geo — that was the hardcode bug.
+    if (detailsList.length === 0 && !geo) {
       detailsList = loadSnapshotFallback(vertical);
       source =
-        "Offline snapshot (live search unavailable — set GOOGLE_PLACES_API_KEY or check network)";
+        "Offline snapshot (could not resolve location — include a city or ZIP)";
+    }
+
+    if (detailsList.length === 0 && geo) {
+      return NextResponse.json(
+        {
+          vertical,
+          zip: geo.zip || hints.zip || parsed.data.zip,
+          location: whereLabel,
+          geo: { lat: geo.lat, lng: geo.lng, display_name: geo.display_name },
+          query: textQuery,
+          source: "none",
+          places: [],
+          top3: [],
+          live: false,
+          error:
+            "We found your area but no shops returned from live search. Add GOOGLE_PLACES_API_KEY for denser GMB results, or try a nearby ZIP.",
+          code: "NO_PLACES_IN_AREA",
+        },
+        { status: 200 }
+      );
     }
 
     const ranked = detailsList
