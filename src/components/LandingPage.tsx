@@ -37,10 +37,12 @@ export function LandingPage() {
           <section className="landing-hero">
             <h1 className="landing-headline font-instrument">
               <span className="landing-line">
-                You <em className="headline-em">name</em> the job.
+                You <em className="headline-em">name</em>
+                {" "}the job.
               </span>
               <span className="landing-line">
-                We <em className="headline-em">lock</em> the price.
+                We <em className="headline-em">lock</em>
+                {" "}the price.
               </span>
             </h1>
             <button

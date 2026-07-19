@@ -1063,9 +1063,15 @@ export function ProductWorkspace() {
             }`}
           >
             {!showResults && (
-              <h1 className="font-instrument text-[clamp(1.75rem,5vw,2.25rem)] tracking-tight leading-tight">
-                <span className="block">You name the job.</span>
-                <span className="block">We lock the price.</span>
+              <h1 className="portal-headline font-instrument">
+                <span className="landing-line">
+                  You <em className="headline-em">name</em>
+                  {" "}the job.
+                </span>
+                <span className="landing-line">
+                  We <em className="headline-em">lock</em>
+                  {" "}the price.
+                </span>
               </h1>
             )}
 

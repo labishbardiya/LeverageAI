@@ -5,18 +5,18 @@ import { useRouter } from "next/navigation";
 type Props = {
   /** Show Close Smart Deals on the right (home only). */
   showCta?: boolean;
-  /** When true, LEVERAGE is a link home (live portal). */
+  /** When true, LEVERAGE links home (live portal). */
   logoAsHomeLink?: boolean;
 };
 
 /**
  * Shared top bar — identical LEVERAGE placement on home + live.
- * No A / circle mark — wordmark only.
+ * Logo sits in a fixed slot so width never shifts between pages.
  */
 export function SiteHeader({ showCta = false, logoAsHomeLink = false }: Props) {
   const router = useRouter();
 
-  const logo = (
+  const logoInner = (
     <span className="logo-leverage logo-plain" aria-label="LEVERAGE">
       LEVERAGE
     </span>
@@ -25,23 +25,31 @@ export function SiteHeader({ showCta = false, logoAsHomeLink = false }: Props) {
   return (
     <header className="site-header sticky top-0 z-30">
       <div className="site-header-inner">
-        {logoAsHomeLink ? (
-          <a href="/" className="site-logo-link no-underline">
-            {logo}
-          </a>
-        ) : (
-          logo
-        )}
-        {showCta && (
-          <button
-            type="button"
-            className="btn-liquid-glass"
-            onClick={() => router.push("/livee")}
-          >
-            Close Smart Deals
-            <span aria-hidden>→</span>
-          </button>
-        )}
+        {/* Fixed-width logo slot — same box home (no link) and live (link) */}
+        <div className="site-logo-slot">
+          {logoAsHomeLink ? (
+            <a href="/" className="site-logo-link no-underline">
+              {logoInner}
+            </a>
+          ) : (
+            <span className="site-logo-link">{logoInner}</span>
+          )}
+        </div>
+        {/* Spacer so LEVERAGE stays left-aligned even without CTA */}
+        <div className="site-header-right">
+          {showCta ? (
+            <button
+              type="button"
+              className="btn-liquid-glass"
+              onClick={() => router.push("/livee")}
+            >
+              Close Smart Deals
+              <span aria-hidden>→</span>
+            </button>
+          ) : (
+            <span className="site-header-right-placeholder" aria-hidden />
+          )}
+        </div>
       </div>
     </header>
   );

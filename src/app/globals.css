@@ -310,6 +310,7 @@ textarea {
   margin-left: auto;
   margin-right: auto;
   max-width: var(--max);
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -324,11 +325,36 @@ textarea {
   }
 }
 
+/* Logo always occupies the same left slot (home + live) */
+.site-logo-slot {
+  display: flex;
+  align-items: center;
+  min-width: 9.5rem;
+  flex-shrink: 0;
+}
+
 .site-logo-link {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
   color: inherit;
+  line-height: 1;
+}
+
+.site-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 2.5rem;
+  min-width: 0;
+}
+
+/* Keeps right side height stable when CTA is hidden on live */
+.site-header-right-placeholder {
+  display: block;
+  width: 1px;
+  height: 2.5rem;
+  visibility: hidden;
 }
 
 /* Liquid glass CTA — sticky hover (lifts + holds glass sheen) */
@@ -453,10 +479,28 @@ textarea {
   display: block;
 }
 
-/* Italicize emphasis words in headline */
+/* Italicize emphasis words; tiny air after “name” / “lock” */
 .headline-em {
   font-style: italic;
   font-weight: 400;
+  margin-right: 0.12em;
+  padding-right: 0.06em;
+}
+
+/* Same headline styling on home + live portal */
+.portal-headline {
+  margin: 0;
+  font-family: var(--font-logo);
+  font-weight: 400;
+  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: #0f1419;
+  text-align: center;
+}
+
+.portal-headline .landing-line {
+  display: block;
 }
 
 .landing-sub {
