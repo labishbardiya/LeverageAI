@@ -3,13 +3,13 @@
 import type { CallStatus } from "@/lib/ui/types";
 
 const STYLES: Record<CallStatus, string> = {
-  idle: "bg-[var(--color-warm-taupe)] text-[var(--color-ash)]",
+  idle: "bg-white/35 text-[var(--color-ash)] border border-white/40",
   dialing:
-    "bg-[var(--color-warm-taupe)] text-[var(--color-graphite)] border border-[var(--color-stone)]",
+    "bg-white/50 text-[var(--color-graphite)] border border-white/60",
   negotiating:
     "bg-[var(--color-ink)] text-white border border-[var(--color-ink)]",
-  done: "bg-[var(--color-eggshell)] text-[var(--color-ink)] border border-[var(--color-ink)]",
-  declined: "bg-[var(--color-stone)] text-[var(--color-smoke)]",
+  done: "bg-white/55 text-[var(--color-ink)] border border-[var(--color-ink)]/25",
+  declined: "bg-white/30 text-[var(--color-smoke)] border border-white/40",
 };
 
 const LABELS: Record<CallStatus, string> = {

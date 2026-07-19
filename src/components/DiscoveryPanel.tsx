@@ -78,33 +78,35 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
   const personas = vertical.vendors.slice(0, 3);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+    <div className="glass-inner space-y-3.5 p-3.5">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
-          Market discovery
-        </p>
-        <h3 className="text-base font-semibold text-slate-900">
-          Real market for ZIP {zip}
+        <p className="label-section">Market discovery</p>
+        <h3 className="mt-0.5 text-base font-medium text-[var(--color-ink)]">
+          Local market · ZIP {zip}
         </h3>
-        <p className="mt-1 text-xs text-slate-500">{source || "Loading…"}</p>
+        <p className="mt-1 text-xs text-[var(--color-smoke)]">
+          {source || "Loading…"}
+        </p>
         {attribution && (
-          <p className="mt-1 text-[10px] text-slate-400">{attribution}</p>
+          <p className="mt-1 text-[10px] text-[var(--color-ash)]">
+            {attribution}
+          </p>
         )}
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Finding providers…</p>
+        <p className="text-sm text-[var(--color-ash)]">Finding providers…</p>
       ) : (
         <>
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
-            <p className="text-xs font-semibold text-emerald-900">
-              AI recommends calling these 3
+          <div className="rounded-xl border border-white/45 bg-white/30 p-3">
+            <p className="text-xs font-medium text-[var(--color-graphite)]">
+              Agents will call these 3
             </p>
             <ul className="mt-2 space-y-3">
               {top3.map((p, i) => (
                 <li
                   key={p.place_id || i}
-                  className="rounded-lg border border-white bg-white p-2.5 shadow-sm"
+                  className="rounded-xl border border-white/50 bg-white/45 p-2.5"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -219,22 +221,26 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
         </>
       )}
 
-      <div className="rounded-lg bg-slate-50 p-3">
-        <p className="text-xs font-semibold text-slate-700">
-          Demo negotiation styles (stand-ins)
+      <div className="rounded-xl border border-white/40 bg-white/25 p-3">
+        <p className="text-xs font-medium text-[var(--color-graphite)]">
+          Negotiation styles
         </p>
-        <ul className="mt-1 space-y-1 text-xs text-slate-600">
+        <ul className="mt-1 space-y-1 text-xs text-[var(--color-smoke)]">
           {personas.map((v) => (
             <li key={v.id}>
-              <span className="font-medium">{vendorDisplayName(v)}</span>
+              <span className="font-medium text-[var(--color-ink)]">
+                {vendorDisplayName(v)}
+              </span>
               {" — "}
               {v.role_label || v.persona || v.id}
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[11px] leading-snug text-slate-500">
-          {caption}
-        </p>
+        {caption && (
+          <p className="mt-2 text-[11px] leading-snug text-[var(--color-ash)]">
+            {caption}
+          </p>
+        )}
       </div>
 
       <button
@@ -243,10 +249,10 @@ export function DiscoveryPanel({ vertical, zip, onContinue, busy }: Props) {
         onClick={onContinue}
         className="btn-pill btn-pill-primary w-full py-2.5 disabled:opacity-50"
       >
-        {busy ? "Starting live negotiations…" : "Start negotiations"}
+        {busy ? "Starting agents…" : "Start negotiations"}
       </button>
-      <p className="text-center text-[10px] text-slate-400">
-        Runs for real against Neon — transcripts and quotes stream as they land.
+      <p className="text-center text-[10px] text-[var(--color-ash)]">
+        Live multi-agent run — transcripts stream as they land.
       </p>
     </div>
   );

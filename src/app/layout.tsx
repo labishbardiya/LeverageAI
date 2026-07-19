@@ -6,7 +6,7 @@ import "./globals.css";
 const inter = Inter({
   variable: "--font-inter-loaded",
   subsets: ["latin"],
-  weight: ["300", "400", "500"],
+  weight: ["300", "400", "500", "600"],
   display: "swap",
 });
 
@@ -32,7 +32,7 @@ export default function RootLayout({
       className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body
-        className="flex min-h-full flex-col bg-[var(--color-eggshell)] text-[var(--color-ink)]"
+        className="flex min-h-full flex-col text-[var(--color-ink)]"
         style={
           {
             fontFamily: "var(--font-inter-loaded), Inter, system-ui, sans-serif",

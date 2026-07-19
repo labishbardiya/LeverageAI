@@ -1,63 +1,198 @@
 @import "tailwindcss";
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap");
 
-/* ElevenLabs-inspired design system (DESIGN.md) */
+/* ─── Design system: Sarvam-like atmosphere + Mac glass ─── */
 :root {
-  --color-eggshell: #fdfcfc;
-  --color-warm-taupe: #f5f3f1;
-  --color-stone: #ebe8e4;
-  --color-ink: #000000;
-  --color-graphite: #44403b;
-  --color-smoke: #777169;
-  --color-ash: #a59f97;
-  --color-violet-spark: #0447ff;
-  --color-ember-orange: #ff4704;
-  --color-button-border: #e5e5e5;
+  --color-ink: #0c0b0a;
+  --color-graphite: #3d3a36;
+  --color-smoke: #6b6560;
+  --color-ash: #9a948c;
+  --color-stone: rgba(255, 255, 255, 0.55);
+  --color-eggshell: #faf8f5;
+  --color-warm-taupe: rgba(255, 255, 255, 0.42);
+  --color-button-border: rgba(12, 11, 10, 0.12);
 
-  --background: var(--color-eggshell);
+  /* Sarvam-inspired atmospheric palette */
+  --bg-deep: #1a1428;
+  --bg-warm: #ff8f5a;
+  --bg-coral: #ff6b4a;
+  --bg-saffron: #ffb347;
+  --bg-violet: #6b5ce7;
+  --bg-indigo: #3d2b6b;
+  --bg-teal: #2dd4bf;
+  --bg-rose: #f472b6;
+
+  --glass-bg: rgba(255, 255, 255, 0.48);
+  --glass-bg-strong: rgba(255, 255, 255, 0.62);
+  --glass-bg-soft: rgba(255, 255, 255, 0.28);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-border-soft: rgba(255, 255, 255, 0.4);
+  --glass-shadow: 0 8px 32px rgba(26, 20, 40, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  --glass-blur: 28px;
+
+  --color-violet-spark: #6b5ce7;
+  --color-ember-orange: #ff6b4a;
+
+  --background: transparent;
   --foreground: var(--color-ink);
 
   --font-waldenburg: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-geist-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --text-caption: 10px;
-  --text-body-sm: 14px;
-  --text-body: 16px;
-  --text-subheading: 18px;
-  --text-heading-sm: 32px;
-  --text-heading: 36px;
   --radius-card: 20px;
   --radius-card-lg: 24px;
   --radius-pill: 9999px;
-  --shadow-whisper: rgba(0, 0, 0, 0.4) 0px 0px 1px 0px,
-    rgba(0, 0, 0, 0.04) 0px 1px 1px 0px, rgba(0, 0, 0, 0.04) 0px 2px 4px 0px;
+  --radius-glass: 22px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-eggshell: #fdfcfc;
-  --color-warm-taupe: #f5f3f1;
-  --color-stone: #ebe8e4;
-  --color-ink: #000000;
-  --color-graphite: #44403b;
-  --color-smoke: #777169;
-  --color-ash: #a59f97;
+  --color-eggshell: #faf8f5;
+  --color-warm-taupe: rgba(255, 255, 255, 0.42);
+  --color-stone: rgba(255, 255, 255, 0.55);
+  --color-ink: #0c0b0a;
+  --color-graphite: #3d3a36;
+  --color-smoke: #6b6560;
+  --color-ash: #9a948c;
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
+/* ─── Ambient canvas (Sarvam-like soft gradient world) ─── */
+html {
+  height: 100%;
+}
+
 body {
-  background: var(--color-eggshell);
+  min-height: 100%;
   color: var(--color-ink);
   font-family: var(--font-inter);
   font-weight: 400;
   letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
+  background: #1a1428;
+  overflow-x: hidden;
 }
 
-/* Display / whisper headlines */
+.ambient-root {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+}
+
+.ambient-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 90% 70% at 10% 20%, rgba(255, 143, 90, 0.55) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 60% at 90% 15%, rgba(107, 92, 231, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 70% 50% at 50% 90%, rgba(45, 212, 191, 0.28) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 70% 60%, rgba(244, 114, 182, 0.22) 0%, transparent 50%),
+    linear-gradient(165deg, #2a1f45 0%, #1a1428 40%, #1e1835 100%);
+}
+
+/* Soft living orbs — AI presence without clutter */
+.ambient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+  animation: orb-drift 18s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.ambient-orb-1 {
+  width: 42vw;
+  height: 42vw;
+  max-width: 520px;
+  max-height: 520px;
+  top: -8%;
+  left: -6%;
+  background: radial-gradient(circle, #ff8f5a 0%, transparent 70%);
+  animation-duration: 22s;
+}
+
+.ambient-orb-2 {
+  width: 38vw;
+  height: 38vw;
+  max-width: 480px;
+  max-height: 480px;
+  top: 5%;
+  right: -8%;
+  background: radial-gradient(circle, #6b5ce7 0%, transparent 70%);
+  animation-duration: 26s;
+  animation-delay: -6s;
+}
+
+.ambient-orb-3 {
+  width: 36vw;
+  height: 36vw;
+  max-width: 440px;
+  max-height: 440px;
+  bottom: -10%;
+  left: 30%;
+  background: radial-gradient(circle, #2dd4bf 0%, transparent 70%);
+  animation-duration: 20s;
+  animation-delay: -12s;
+}
+
+/* Stronger pulse while agents negotiate */
+.ambient-root.is-working .ambient-orb {
+  opacity: 0.72;
+  animation-duration: 10s;
+}
+
+.ambient-root.is-working .ambient-orb-1 {
+  animation-name: orb-pulse-warm;
+}
+
+.ambient-mesh {
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 20%, transparent 75%);
+}
+
+@keyframes orb-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(3%, 4%) scale(1.06);
+  }
+  66% {
+    transform: translate(-2%, 2%) scale(0.96);
+  }
+}
+
+@keyframes orb-pulse-warm {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(2%, 3%) scale(1.12);
+    opacity: 0.85;
+  }
+}
+
+.ambient-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Typography ─── */
 .font-display {
   font-family: var(--font-waldenburg);
   font-weight: 300;
@@ -65,7 +200,118 @@ body {
   line-height: 1.12;
 }
 
-/* Pill buttons */
+/* ─── Mac glass panels ─── */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-glass);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-panel-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(36px) saturate(190%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-glass);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-inner {
+  background: rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+}
+
+.glass-header {
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+/* Soft highlight rim */
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.glass-panel {
+  position: relative;
+}
+
+/* ─── Agent activity strip ─── */
+.agent-activity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  background: linear-gradient(
+    90deg,
+    rgba(107, 92, 231, 0.45),
+    rgba(255, 107, 74, 0.4),
+    rgba(45, 212, 191, 0.35)
+  );
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  letter-spacing: 0.01em;
+}
+
+.agent-activity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  animation: agent-dot 1.4s ease-in-out infinite;
+}
+
+.agent-activity-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.agent-activity-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes agent-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* Breathing rim on glass while agents work */
+.glass-working {
+  animation: glass-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes glass-breathe {
+  0%,
+  100% {
+    box-shadow: var(--glass-shadow), 0 0 0 0 rgba(107, 92, 231, 0);
+  }
+  50% {
+    box-shadow: var(--glass-shadow), 0 0 28px 2px rgba(107, 92, 231, 0.18);
+  }
+}
+
+/* ─── Buttons ─── */
 .btn-pill {
   display: inline-flex;
   align-items: center;
@@ -78,7 +324,7 @@ body {
   line-height: 1.2;
   padding: 0.625rem 1rem;
   border: 1px solid var(--color-button-border);
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease;
   cursor: pointer;
 }
 .btn-pill:disabled {
@@ -88,47 +334,42 @@ body {
 .btn-pill-primary {
   background: var(--color-ink);
   color: #fff;
+  border-color: transparent;
 }
 .btn-pill-primary:hover:not(:disabled) {
-  opacity: 0.88;
+  opacity: 0.9;
 }
 .btn-pill-outline {
-  background: var(--color-eggshell);
+  background: rgba(255, 255, 255, 0.55);
   color: var(--color-ink);
+  border-color: rgba(12, 11, 10, 0.1);
+  backdrop-filter: blur(8px);
 }
 .btn-pill-outline:hover:not(:disabled) {
-  background: var(--color-warm-taupe);
+  background: rgba(255, 255, 255, 0.75);
 }
 .btn-pill-ghost {
   background: transparent;
   color: var(--color-ink);
 }
 
-/* Cards */
-.card-taupe {
-  background: var(--color-warm-taupe);
-  border-radius: var(--radius-card);
-  padding: 1.25rem 1.5rem;
-}
-.card-white {
-  background: var(--color-eggshell);
-  border-radius: var(--radius-card);
-  padding: 1rem 1.25rem;
-  box-shadow: var(--shadow-whisper);
-  border: 1px solid var(--color-stone);
-}
+/* Legacy card aliases → glass */
+.card-taupe,
+.card-white,
 .card-white-flat {
-  background: var(--color-eggshell);
-  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px;
   padding: 1rem 1.25rem;
-  border: 1px solid var(--color-stone);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: none;
 }
 
 .hairline {
-  border-color: var(--color-stone);
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
-/* Section label */
 .label-section {
   font-size: 11px;
   font-weight: 500;
@@ -137,24 +378,56 @@ body {
   color: var(--color-smoke);
 }
 
-/* Product spark sphere (accent only — not UI chrome) */
+/* Product spark sphere */
 .audio-sphere {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 9999px;
   background: radial-gradient(
     circle at 35% 35%,
-    #ff9a7a 0%,
+    #ffb088 0%,
     var(--color-ember-orange) 35%,
     var(--color-violet-spark) 75%,
-    #1a1a2e 100%
+    #1a1428 100%
   );
-  box-shadow: 0 0 24px rgba(4, 71, 255, 0.15);
+  box-shadow: 0 0 20px rgba(107, 92, 231, 0.35),
+    0 0 40px rgba(255, 107, 74, 0.2);
+  animation: sphere-glow 4s ease-in-out infinite;
+}
+
+.ambient-root.is-working .audio-sphere {
+  animation: sphere-glow-active 1.8s ease-in-out infinite;
+}
+
+@keyframes sphere-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 16px rgba(107, 92, 231, 0.3),
+      0 0 32px rgba(255, 107, 74, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(107, 92, 231, 0.45),
+      0 0 48px rgba(255, 107, 74, 0.25);
+  }
+}
+
+@keyframes sphere-glow-active {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 18px rgba(107, 92, 231, 0.4),
+      0 0 36px rgba(255, 107, 74, 0.25);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 28px rgba(107, 92, 231, 0.6),
+      0 0 56px rgba(255, 107, 74, 0.35);
+  }
 }
 
 @keyframes price-flash-down {
   0% {
-    background-color: #f5f3f1;
+    background-color: rgba(16, 185, 129, 0.15);
     transform: scale(1.03);
   }
   100% {
@@ -164,7 +437,7 @@ body {
 }
 @keyframes price-flash-up {
   0% {
-    background-color: #ebe8e4;
+    background-color: rgba(244, 63, 94, 0.12);
     transform: scale(1.03);
   }
   100% {
@@ -183,18 +456,19 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-stone) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
 }
 
-/* Chat — editorial, not WhatsApp green */
+/* Chat bubbles on glass */
 .wa-chat-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-ash) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
 }
 .wa-bubble-in {
   border-radius: 0 12px 12px 12px;
-  background: #fff;
-  border: 1px solid var(--color-stone);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 3px rgba(26, 20, 40, 0.06);
 }
 .wa-bubble-in::before {
   content: "";
@@ -205,12 +479,13 @@ body {
   height: 0;
   border-style: solid;
   border-width: 0 8px 8px 0;
-  border-color: transparent var(--color-stone) transparent transparent;
+  border-color: transparent rgba(255, 255, 255, 0.7) transparent transparent;
 }
 .wa-bubble-out {
   border-radius: 12px 0 12px 12px;
-  background: var(--color-warm-taupe);
-  border: 1px solid var(--color-stone);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 1px 3px rgba(26, 20, 40, 0.05);
 }
 .wa-bubble-out::before {
   content: "";
@@ -221,7 +496,7 @@ body {
   height: 0;
   border-style: solid;
   border-width: 0 0 8px 8px;
-  border-color: transparent transparent transparent var(--color-warm-taupe);
+  border-color: transparent transparent transparent rgba(255, 255, 255, 0.55);
 }
 
 @keyframes wa-message-in {
@@ -238,24 +513,28 @@ body {
   animation: wa-message-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @media (prefers-reduced-motion: reduce) {
-  .wa-msg-in {
-    animation: none;
+  .wa-msg-in,
+  .ambient-orb,
+  .audio-sphere,
+  .glass-working,
+  .agent-activity-dot {
+    animation: none !important;
   }
 }
 
-/* Utility overrides for slate/emerald → design system during transition */
+/* Soften legacy slate/emerald overrides for glass world */
 .bg-slate-50 {
-  background-color: var(--color-eggshell) !important;
+  background-color: rgba(255, 255, 255, 0.35) !important;
 }
 .bg-slate-100 {
-  background-color: var(--color-warm-taupe) !important;
+  background-color: rgba(255, 255, 255, 0.28) !important;
 }
 .bg-white {
-  background-color: var(--color-eggshell) !important;
+  background-color: rgba(255, 255, 255, 0.45) !important;
 }
 .border-slate-200,
 .border-slate-100 {
-  border-color: var(--color-stone) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
 }
 .text-slate-900 {
   color: var(--color-ink) !important;
@@ -284,37 +563,37 @@ body {
 }
 .bg-emerald-50,
 .bg-emerald-50\/40 {
-  background-color: var(--color-warm-taupe) !important;
+  background-color: rgba(255, 255, 255, 0.4) !important;
 }
 .border-emerald-100,
 .border-emerald-300,
 .ring-emerald-100,
 .ring-emerald-200 {
-  border-color: var(--color-stone) !important;
-  --tw-ring-color: var(--color-stone) !important;
+  border-color: rgba(255, 255, 255, 0.55) !important;
+  --tw-ring-color: rgba(107, 92, 231, 0.25) !important;
 }
 .from-emerald-50 {
-  --tw-gradient-from: var(--color-warm-taupe) !important;
+  --tw-gradient-from: rgba(255, 255, 255, 0.5) !important;
 }
 .to-white {
-  --tw-gradient-to: var(--color-eggshell) !important;
+  --tw-gradient-to: rgba(255, 255, 255, 0.35) !important;
 }
 .bg-rose-50 {
-  background-color: #faf6f4 !important;
+  background-color: rgba(255, 240, 236, 0.7) !important;
 }
 .text-rose-800,
 .text-rose-600 {
-  color: var(--color-graphite) !important;
+  color: #9f3a2a !important;
 }
 .ring-rose-200 {
-  --tw-ring-color: var(--color-stone) !important;
+  --tw-ring-color: rgba(255, 107, 74, 0.3) !important;
 }
 .bg-sky-50 {
-  background-color: var(--color-warm-taupe) !important;
+  background-color: rgba(255, 255, 255, 0.35) !important;
 }
 .text-sky-800 {
   color: var(--color-graphite) !important;
 }
 .ring-sky-200 {
-  --tw-ring-color: var(--color-stone) !important;
+  --tw-ring-color: rgba(255, 255, 255, 0.4) !important;
 }

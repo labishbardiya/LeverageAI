@@ -372,16 +372,29 @@ export function NegotiatorDashboard() {
 
   if (loadError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-8">
-        <p className="text-sm text-rose-600">{loadError}</p>
+      <div className="ambient-root flex min-h-screen items-center justify-center p-8">
+        <div className="ambient-bg" aria-hidden>
+          <div className="ambient-orb ambient-orb-1" />
+          <div className="ambient-orb ambient-orb-2" />
+        </div>
+        <p className="ambient-content glass-panel px-6 py-4 text-sm text-[#9f3a2a]">
+          {loadError}
+        </p>
       </div>
     );
   }
 
   if (!vertical || !state) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-8">
-        <p className="text-sm text-slate-500">Loading…</p>
+      <div className="ambient-root flex min-h-screen items-center justify-center p-8">
+        <div className="ambient-bg" aria-hidden>
+          <div className="ambient-orb ambient-orb-1" />
+          <div className="ambient-orb ambient-orb-2" />
+          <div className="ambient-orb ambient-orb-3" />
+        </div>
+        <p className="ambient-content glass-panel px-6 py-4 text-sm text-[var(--color-smoke)]">
+          Loading agents…
+        </p>
       </div>
     );
   }
@@ -397,103 +410,139 @@ export function NegotiatorDashboard() {
       ? rankSessions(state.sessions, vertical, jobType)
       : state.ranked;
 
+  const isWorking = state.phase === "calling" || busy;
+  const liveAgents = state.sessions.filter(
+    (s) => s.status === "dialing" || s.status === "negotiating",
+  ).length;
+
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--color-eggshell)] text-[var(--color-ink)]">
-      <header className="shrink-0 border-b border-[var(--color-stone)] bg-[var(--color-eggshell)]">
-        <div className="mx-auto flex max-w-[1280px] items-center justify-between px-6 py-3.5">
-          <div className="flex items-center gap-3">
-            <div className="audio-sphere shrink-0" aria-hidden />
-            <div>
-              <h1 className="font-display text-[20px] leading-none tracking-[-0.02em] text-[var(--color-ink)]">
-                LeverageAI
-              </h1>
-              <p className="mt-0.5 text-[12px] text-[var(--color-smoke)]">
-                {verticalTitle(vertical)}
-                {replayLive
-                  ? " · live-run replay"
-                  : replay
-                    ? " · golden replay"
-                    : " · live multi-agent"}
-              </p>
+    <div
+      className={`ambient-root flex min-h-screen flex-col text-[var(--color-ink)] ${
+        isWorking ? "is-working" : ""
+      }`}
+    >
+      <div className="ambient-bg" aria-hidden>
+        <div className="ambient-orb ambient-orb-1" />
+        <div className="ambient-orb ambient-orb-2" />
+        <div className="ambient-orb ambient-orb-3" />
+        <div className="ambient-mesh" />
+      </div>
+
+      <div className="ambient-content flex min-h-screen flex-col">
+        <header className="glass-header sticky top-0 z-20 shrink-0">
+          <div className="mx-auto flex max-w-[1280px] items-center justify-between px-5 py-3 sm:px-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="audio-sphere shrink-0" aria-hidden />
+              <div className="min-w-0">
+                <h1 className="font-display text-[20px] leading-none tracking-[-0.02em] text-[var(--color-ink)]">
+                  LeverageAI
+                </h1>
+                <p className="mt-0.5 truncate text-[12px] text-[var(--color-smoke)]">
+                  {verticalTitle(vertical)}
+                  {replayLive
+                    ? " · live-run replay"
+                    : replay
+                      ? " · golden replay"
+                      : " · multi-agent"}
+                </p>
+              </div>
+              <div className="ml-2 hidden flex-wrap gap-1.5 sm:ml-4 sm:flex">
+                {VERTICALS.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => switchVertical(v.id)}
+                    className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
+                      verticalId === v.id
+                        ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-white"
+                        : "border-white/50 bg-white/40 text-[var(--color-graphite)] hover:bg-white/65"
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="ml-4 flex flex-wrap gap-1.5">
-              {VERTICALS.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => switchVertical(v.id)}
-                  className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
-                    verticalId === v.id
-                      ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-white"
-                      : "border-[var(--color-button-border)] bg-[var(--color-eggshell)] text-[var(--color-graphite)] hover:bg-[var(--color-warm-taupe)]"
-                  }`}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <a
-              href="/architecture"
-              className="btn-pill btn-pill-ghost text-[12px]"
-            >
-              Architecture
-            </a>
             <PhasePill phase={state.phase} />
           </div>
-        </div>
-        {banner && (
-          <div className="border-t border-[var(--color-stone)] bg-[var(--color-warm-taupe)] px-6 py-2 text-center text-[12px] text-[var(--color-graphite)]">
-            {banner}
-          </div>
-        )}
-      </header>
 
-      <main className="mx-auto grid w-full max-w-[1280px] flex-1 grid-cols-1 gap-6 p-6 lg:grid-cols-3 lg:gap-5 lg:min-h-0 lg:overflow-hidden">
-        <div className="min-h-0 space-y-4 lg:h-[calc(100vh-5.5rem)] lg:overflow-auto">
-          <JobColumn
-            vertical={vertical}
-            phase={state.phase}
-            jobSpec={state.job_spec}
-            onJobSpecChange={onJobSpecChange}
-            onConfirm={onConfirm}
-            voiceAgentId={voiceAgentId}
-            busy={busy}
-          />
-          {showDiscovery && state.job_id && state.job_spec && (
-            <DiscoveryPanel
-              vertical={vertical}
-              zip={String(state.job_spec.zip || "28202")}
-              busy={busy}
-              onContinue={() =>
-                startSessions(state.job_id!, state.job_spec as JobSpec)
-              }
-            />
+          {isWorking && (
+            <div className="agent-activity" role="status" aria-live="polite">
+              <span className="agent-activity-dot" />
+              <span className="agent-activity-dot" />
+              <span className="agent-activity-dot" />
+              <span>
+                {liveAgents > 0
+                  ? `${liveAgents} agent${liveAgents === 1 ? "" : "s"} negotiating in parallel`
+                  : "Agents connecting — multi-agent orchestration running"}
+              </span>
+            </div>
           )}
-          <LearningPanel vertical={vertical.id} />
-        </div>
-        <div className="min-h-0 lg:h-[calc(100vh-5.5rem)]">
-          <CallsColumn
-            vertical={vertical}
-            sessions={state.sessions}
-            highlight={highlight}
-            onHighlightClear={() => setHighlight(null)}
-          />
-        </div>
-        <div className="min-h-0 lg:h-[calc(100vh-5.5rem)]">
-          <DealColumn
-            vertical={vertical}
-            phase={state.phase}
-            ranked={ranked}
-            sessions={state.sessions}
-            onListen={onListen}
-            replay={replay}
-            jobSpec={state.job_spec}
-            dealReview={state.deal_review}
-          />
-        </div>
-      </main>
+
+          {banner && !isWorking && (
+            <div className="border-t border-white/30 bg-white/25 px-6 py-2 text-center text-[12px] text-[var(--color-graphite)]">
+              {banner}
+            </div>
+          )}
+        </header>
+
+        <main className="mx-auto grid w-full max-w-[1280px] flex-1 grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-3 lg:gap-4 lg:min-h-0 lg:overflow-hidden">
+          <div
+            className={`glass-panel flex min-h-0 flex-col overflow-hidden p-4 sm:p-5 lg:h-[calc(100vh-6.5rem)] ${
+              isWorking ? "" : ""
+            }`}
+          >
+            <div className="min-h-0 flex-1 space-y-4 overflow-auto">
+              <JobColumn
+                vertical={vertical}
+                phase={state.phase}
+                jobSpec={state.job_spec}
+                onJobSpecChange={onJobSpecChange}
+                onConfirm={onConfirm}
+                voiceAgentId={voiceAgentId}
+                busy={busy}
+              />
+              {showDiscovery && state.job_id && state.job_spec && (
+                <DiscoveryPanel
+                  vertical={vertical}
+                  zip={String(state.job_spec.zip || "28202")}
+                  busy={busy}
+                  onContinue={() =>
+                    startSessions(state.job_id!, state.job_spec as JobSpec)
+                  }
+                />
+              )}
+              <LearningPanel vertical={vertical.id} />
+            </div>
+          </div>
+
+          <div
+            className={`glass-panel flex min-h-0 flex-col overflow-hidden p-4 sm:p-5 lg:h-[calc(100vh-6.5rem)] ${
+              isWorking ? "glass-working" : ""
+            }`}
+          >
+            <CallsColumn
+              vertical={vertical}
+              sessions={state.sessions}
+              highlight={highlight}
+              onHighlightClear={() => setHighlight(null)}
+            />
+          </div>
+
+          <div className="glass-panel flex min-h-0 flex-col overflow-hidden p-4 sm:p-5 lg:h-[calc(100vh-6.5rem)]">
+            <DealColumn
+              vertical={vertical}
+              phase={state.phase}
+              ranked={ranked}
+              sessions={state.sessions}
+              onListen={onListen}
+              replay={replay}
+              jobSpec={state.job_spec}
+              dealReview={state.deal_review}
+            />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
@@ -505,15 +554,15 @@ function PhasePill({ phase }: { phase: string }) {
       : phase === "confirmed"
         ? "Confirmed"
         : phase === "calling"
-          ? "Live calls"
+          ? "Agents live"
           : "Deal ready";
   const active = phase === "complete" || phase === "calling";
   return (
     <span
-      className={`rounded-full border px-3 py-1 text-[12px] font-medium ${
+      className={`shrink-0 rounded-full border px-3 py-1 text-[12px] font-medium ${
         active
           ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-white"
-          : "border-[var(--color-stone)] bg-[var(--color-warm-taupe)] text-[var(--color-smoke)]"
+          : "border-white/50 bg-white/45 text-[var(--color-smoke)]"
       }`}
     >
       {label}

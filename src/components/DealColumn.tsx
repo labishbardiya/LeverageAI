@@ -77,30 +77,25 @@ export function DealColumn({
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-col gap-4">
+    <section className="flex h-full min-h-0 flex-col gap-3.5">
       <header className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
-            Deal
-          </p>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <p className="label-section">Your deal</p>
+          <h2 className="mt-0.5 text-[17px] font-medium tracking-tight text-[var(--color-ink)]">
             {copy.deal_column_title}
           </h2>
-          <p className="text-sm text-slate-500">
-            Ranked quotes · red flags (≥{redFlagThresholdPct(vertical)}% under
-            mid)
+          <p className="text-[13px] text-[var(--color-smoke)]">
+            Review layer ranks all three outcomes
           </p>
           {bench?.source && (
             <p
-              className="mt-1 text-[10px] text-slate-400"
+              className="mt-1 text-[10px] text-[var(--color-ash)]"
               title={bench.source}
             >
               Fair band{" "}
               {bench.fair_low != null && bench.fair_high != null
                 ? `$${bench.fair_low}–$${bench.fair_high}`
-                : ""}{" "}
-              · {bench.source.slice(0, 60)}
-              {bench.source.length > 60 ? "…" : ""}
+                : ""}
             </p>
           )}
         </div>
@@ -108,20 +103,33 @@ export function DealColumn({
           <button
             type="button"
             onClick={exportReport}
-            className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+            className="btn-pill btn-pill-primary shrink-0 !px-3 !py-1.5 text-xs"
           >
-            Export report
+            Export
           </button>
         )}
       </header>
 
       {!ready ? (
-        <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center">
-          <p className="text-sm text-slate-400">
-            {phase === "calling"
-              ? "Three agents negotiating in parallel — your deal appears when all finish."
-              : "Confirm your job to start simultaneous calls."}
-          </p>
+        <div className="glass-inner flex flex-1 flex-col items-center justify-center p-6 text-center">
+          {phase === "calling" ? (
+            <>
+              <div className="mb-3 flex gap-1.5" aria-hidden>
+                <span className="agent-activity-dot !bg-[var(--color-ink)] !shadow-none" />
+                <span className="agent-activity-dot !bg-[var(--color-ink)] !shadow-none" />
+                <span className="agent-activity-dot !bg-[var(--color-ink)] !shadow-none" />
+              </div>
+              <p className="text-sm text-[var(--color-smoke)]">
+                Three agents negotiating in parallel.
+                <br />
+                Your deal appears when they finish.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-[var(--color-ash)]">
+              Confirm your job to start simultaneous negotiations.
+            </p>
+          )}
         </div>
       ) : (
         <div className="min-h-0 flex-1 space-y-3 overflow-auto">
@@ -159,36 +167,34 @@ export function DealColumn({
 
 function ReviewHero({ review }: { review: DealReviewUi }) {
   return (
-    <article className="rounded-xl border border-emerald-300 bg-gradient-to-b from-emerald-50 to-white p-4 shadow-sm ring-1 ring-emerald-100">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-800">
-        Review layer · your deal
-      </p>
-      <h3 className="mt-1 text-lg font-semibold leading-snug text-slate-900">
+    <article className="glass-inner p-4 ring-1 ring-white/70">
+      <p className="label-section">Recommended</p>
+      <h3 className="mt-1 text-lg font-medium leading-snug text-[var(--color-ink)]">
         {review.headline}
       </h3>
       {review.top_pick?.total != null && (
-        <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-800">
+        <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight text-[var(--color-ink)]">
           {formatUsd(review.top_pick.total)}
         </p>
       )}
       {review.top_pick && (
-        <p className="mt-1 text-xs font-medium text-emerald-700">
+        <p className="mt-1 text-xs font-medium text-[var(--color-smoke)]">
           {review.top_pick.label}
           {review.top_pick.red_flag ? " · flagged" : " · clean quote"}
         </p>
       )}
 
       <div className="mt-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          Why this one (plain English)
+        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-ash)]">
+          Why this one
         </p>
         <ul className="mt-1.5 space-y-1.5">
           {review.why_top.map((line, i) => (
             <li
               key={i}
-              className="flex gap-2 text-sm leading-snug text-slate-700"
+              className="flex gap-2 text-sm leading-snug text-[var(--color-graphite)]"
             >
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-ink)]" />
               <span>{line}</span>
             </li>
           ))}
@@ -196,11 +202,11 @@ function ReviewHero({ review }: { review: DealReviewUi }) {
       </div>
 
       {review.how_others_compared.length > 0 && (
-        <details className="mt-3 rounded-lg border border-slate-100 bg-white/80 p-2.5">
-          <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+        <details className="mt-3 rounded-xl border border-white/45 bg-white/35 p-2.5">
+          <summary className="cursor-pointer text-xs font-medium text-[var(--color-graphite)]">
             How the other two compared
           </summary>
-          <ul className="mt-2 space-y-1.5 text-xs leading-snug text-slate-600">
+          <ul className="mt-2 space-y-1.5 text-xs leading-snug text-[var(--color-smoke)]">
             {review.how_others_compared.map((line, i) => (
               <li key={i}>• {line}</li>
             ))}
@@ -208,11 +214,11 @@ function ReviewHero({ review }: { review: DealReviewUi }) {
         </details>
       )}
 
-      <details className="mt-2 rounded-lg border border-slate-100 bg-white/80 p-2.5">
-        <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+      <details className="mt-2 rounded-xl border border-white/45 bg-white/35 p-2.5">
+        <summary className="cursor-pointer text-xs font-medium text-[var(--color-graphite)]">
           How multi-agent negotiation worked
         </summary>
-        <ul className="mt-2 space-y-1 text-xs text-slate-600">
+        <ul className="mt-2 space-y-1 text-xs text-[var(--color-smoke)]">
           {review.how_we_negotiated.map((line, i) => (
             <li key={i}>• {line}</li>
           ))}
@@ -220,13 +226,13 @@ function ReviewHero({ review }: { review: DealReviewUi }) {
       </details>
 
       <div className="mt-3 flex items-center gap-2">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/40">
           <div
-            className="h-1.5 rounded-full bg-emerald-500"
+            className="h-1.5 rounded-full bg-[var(--color-ink)]"
             style={{ width: `${Math.min(100, review.confidence)}%` }}
           />
         </div>
-        <span className="text-[11px] tabular-nums text-slate-500">
+        <span className="text-[11px] tabular-nums text-[var(--color-smoke)]">
           {review.confidence}% confidence
         </span>
       </div>
@@ -325,31 +331,31 @@ function DealCard({
 
   return (
     <article
-      className={`rounded-xl border bg-white p-4 shadow-sm ${
-        deal.recommended
-          ? "border-emerald-300 ring-1 ring-emerald-200"
-          : "border-slate-200"
+      className={`glass-inner p-3.5 ${
+        deal.recommended ? "ring-1 ring-[var(--color-ink)]/20" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-400">
+            <span className="text-xs font-medium text-[var(--color-ash)]">
               #{deal.rank}
             </span>
-            <h3 className="font-semibold text-slate-900">{s.vendor_name}</h3>
+            <h3 className="font-medium text-[var(--color-ink)]">
+              {s.vendor_name}
+            </h3>
             {deal.recommended && (
-              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white">
-                Recommended
+              <span className="rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[11px] font-medium text-white">
+                Top pick
               </span>
             )}
           </div>
           {price != null ? (
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
+            <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-[var(--color-ink)]">
               {formatUsd(price)}
             </p>
           ) : (
-            <p className="mt-1 text-sm font-medium text-slate-500">
+            <p className="mt-1 text-sm font-medium text-[var(--color-smoke)]">
               {s.outcome === "documented_decline"
                 ? "Documented decline"
                 : s.outcome === "callback_commitment"
@@ -361,45 +367,45 @@ function DealCard({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="text-xs font-medium text-slate-500 hover:text-slate-800"
+          className="text-xs font-medium text-[var(--color-smoke)] hover:text-[var(--color-ink)]"
         >
           {open ? "Hide" : "Details"}
         </button>
       </div>
 
       {deal.red_flag && deal.red_flag_pct != null && (
-        <div className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800 ring-1 ring-rose-200">
+        <div className="mt-2 rounded-xl bg-[rgba(255,240,236,0.75)] px-3 py-2 text-xs font-medium text-[#9f3a2a] ring-1 ring-[rgba(255,107,74,0.25)]">
           {redBanner(vertical, deal.red_flag_pct)}
         </div>
       )}
 
       {deal.why && (
-        <p className="mt-2 text-sm text-slate-600">{deal.why}</p>
+        <p className="mt-2 text-sm text-[var(--color-smoke)]">{deal.why}</p>
       )}
 
       {s.callback_at && (
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-[var(--color-smoke)]">
           Callback: <span className="font-medium">{s.callback_at}</span>
         </p>
       )}
 
       {open && s.line_items?.length > 0 && (
-        <ul className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+        <ul className="mt-3 space-y-1.5 border-t border-white/35 pt-3">
           {s.line_items.map((li, i) => (
             <li
               key={`${li.label}-${i}`}
               className="flex items-center justify-between gap-2 text-sm"
             >
-              <span className="text-slate-700">{li.label}</span>
+              <span className="text-[var(--color-graphite)]">{li.label}</span>
               <span className="flex items-center gap-2">
-                <span className="tabular-nums font-medium text-slate-900">
+                <span className="tabular-nums font-medium text-[var(--color-ink)]">
                   {formatUsd(li.amount)}
                 </span>
                 {li.evidence_ts != null && (
                   <button
                     type="button"
                     onClick={() => onListen(s.vendor_id, li.evidence_ts!)}
-                    className="text-[11px] font-medium text-emerald-700 hover:underline"
+                    className="text-[11px] font-medium text-[var(--color-ink)] underline-offset-2 hover:underline"
                   >
                     Listen
                   </button>
@@ -411,14 +417,14 @@ function DealCard({
       )}
 
       {open && chain.length > 0 && (
-        <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+        <div className="mt-3 rounded-xl border border-white/45 bg-white/35 p-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-ash)]">
             Leverage chain
           </p>
           <ol className="mt-2 space-y-1.5">
             {chain.map((step, i) => (
-              <li key={i} className="text-xs text-slate-700">
-                <span className="font-mono text-emerald-700">
+              <li key={i} className="text-xs text-[var(--color-graphite)]">
+                <span className="font-mono text-[var(--color-smoke)]">
                   [t={formatTs(step.t_ms)}]
                 </span>{" "}
                 {step.label}
@@ -429,9 +435,9 @@ function DealCard({
       )}
 
       {open && (
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-[var(--color-ash)]">
           {replay || !s.audio_url
-            ? "Recording available in live mode — golden transcript shown."
+            ? "Recording available in live mode — transcript shown."
             : "Live recording attached."}
         </p>
       )}
@@ -440,7 +446,7 @@ function DealCard({
         <button
           type="button"
           onClick={downloadTranscript}
-          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          className="rounded-full border border-white/50 bg-white/40 px-2.5 py-1.5 text-xs font-medium text-[var(--color-graphite)] hover:bg-white/65"
         >
           Download transcript
         </button>
@@ -451,7 +457,7 @@ function DealCard({
             type="button"
             onClick={downloadAudio}
             disabled
-            className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-400"
+            className="rounded-full border border-white/40 px-2.5 py-1.5 text-xs font-medium text-[var(--color-ash)]"
           >
             Play audio (live only)
           </button>

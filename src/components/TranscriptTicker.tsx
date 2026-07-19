@@ -55,20 +55,25 @@ export function TranscriptTicker({
   if (!visible.length) {
     return (
       <div
-        className="flex items-center justify-center rounded-xl bg-[#e5ddd5]/30 px-3"
+        className="flex items-center justify-center rounded-xl bg-white/20 px-3"
         style={{ minHeight: viewportMaxH }}
       >
-        <p className="text-xs text-slate-400 italic">Waiting for conversation…</p>
+        <p className="text-xs italic text-[var(--color-ash)]">
+          Waiting for conversation…
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-100 bg-[#e5ddd5]/40">
+    <div className="overflow-hidden rounded-xl border border-white/40 bg-white/25">
       <div
         ref={scrollerRef}
         className="wa-chat-scroll overflow-y-auto overscroll-contain px-2.5 py-2"
-        style={{ maxHeight: viewportMaxH, minHeight: Math.min(viewportMaxH, 120) }}
+        style={{
+          maxHeight: viewportMaxH,
+          minHeight: Math.min(viewportMaxH, 120),
+        }}
         role="log"
         aria-live="polite"
         aria-relevant="additions"
@@ -80,7 +85,6 @@ export function TranscriptTicker({
             const isVendor = line.speaker === "vendor";
             const active =
               highlightTs != null && Math.abs(line.ts - highlightTs) < 0.5;
-            // Animate messages that just entered (last visible batch)
             const isNew = idx >= Math.max(0, visible.length - 3);
 
             return (
@@ -93,17 +97,19 @@ export function TranscriptTicker({
                 onClick={() => onLineClick?.(line.ts)}
               >
                 <div
-                  className={`relative max-w-[88%] px-2.5 py-1.5 text-xs leading-snug shadow-sm ${
+                  className={`relative max-w-[88%] px-2.5 py-1.5 text-xs leading-snug ${
                     isVendor
-                      ? "wa-bubble-out bg-[#d9fdd3] text-slate-900"
+                      ? "wa-bubble-out text-[var(--color-ink)]"
                       : isAgent
-                        ? "wa-bubble-in bg-white text-slate-800"
-                        : "rounded-lg bg-slate-100 text-slate-600"
+                        ? "wa-bubble-in text-[var(--color-graphite)]"
+                        : "rounded-lg bg-white/40 text-[var(--color-smoke)]"
                   } ${
-                    active ? "ring-2 ring-emerald-400 ring-offset-1" : ""
+                    active
+                      ? "ring-2 ring-[var(--color-ink)]/25 ring-offset-1 ring-offset-transparent"
+                      : ""
                   } ${onLineClick ? "cursor-pointer" : ""}`}
                 >
-                  <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-60">
+                  <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide opacity-55">
                     {isVendor
                       ? "Provider"
                       : line.speaker === "system"
@@ -111,11 +117,7 @@ export function TranscriptTicker({
                         : "Agent"}
                   </p>
                   <p className="whitespace-pre-wrap break-words">{line.text}</p>
-                  <p
-                    className={`mt-0.5 text-right text-[9px] tabular-nums opacity-50 ${
-                      isVendor ? "text-slate-600" : "text-slate-500"
-                    }`}
-                  >
+                  <p className="mt-0.5 text-right text-[9px] tabular-nums opacity-45">
                     {formatTs(line.ts)}
                   </p>
                 </div>
@@ -126,8 +128,8 @@ export function TranscriptTicker({
         <div ref={bottomRef} />
       </div>
       {lines.length > visibleCount && (
-        <p className="border-t border-slate-200/60 bg-white/50 px-2 py-1 text-center text-[10px] text-slate-400">
-          Scroll for full conversation · {lines.length} messages
+        <p className="border-t border-white/35 bg-white/30 px-2 py-1 text-center text-[10px] text-[var(--color-ash)]">
+          Scroll · {lines.length} messages
         </p>
       )}
     </div>

@@ -193,22 +193,20 @@ export function JobColumn({
   const hasSpec = jobSpec && Object.keys(jobSpec).length > 0;
 
   return (
-    <section className="flex h-full min-h-0 flex-col gap-4">
+    <section className="flex h-full min-h-0 flex-col gap-3.5">
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
-          Job
-        </p>
-        <h2 className="text-lg font-semibold text-slate-900">
+        <p className="label-section">Job</p>
+        <h2 className="mt-0.5 text-[17px] font-medium tracking-tight text-[var(--color-ink)]">
           {copy.job_column_title}
         </h2>
-        <p className="text-sm text-slate-500">
+        <p className="text-[13px] text-[var(--color-smoke)]">
           {vertical.displayName || vertical.label || vertical.name}
         </p>
       </header>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="glass-inner p-3.5">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-800">
+          <p className="text-sm font-medium text-[var(--color-graphite)]">
             {copy.voice_intake_label}
           </p>
           <button
@@ -221,20 +219,18 @@ export function JobColumn({
             Start voice intake
           </button>
           {voiceStatus && (
-            <p className="text-xs text-emerald-800 bg-emerald-50 rounded-md px-2 py-1.5">
+            <p className="rounded-lg bg-white/50 px-2.5 py-1.5 text-xs text-[var(--color-graphite)]">
               {voiceStatus}
               {intakeId ? (
-                <span className="block text-[10px] text-slate-500 mt-0.5">
+                <span className="mt-0.5 block text-[10px] text-[var(--color-ash)]">
                   intake_id: {intakeId.slice(0, 8)}…
                 </span>
               ) : null}
             </p>
           )}
-          <p className="text-xs text-slate-500">
-            Speak your job to the agent, then say{" "}
-            <strong>“submit the job”</strong> / confirm so it calls{" "}
-            <code className="text-[10px]">submit_spec</code>. This form polls
-            and fills automatically.
+          <p className="text-xs leading-relaxed text-[var(--color-smoke)]">
+            Speak your job, then say <strong>“submit the job”</strong>. The
+            form fills automatically.
           </p>
         </div>
       </div>
@@ -246,18 +242,20 @@ export function JobColumn({
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
-        className={`rounded-xl border border-dashed p-4 text-center ${
+        className={`rounded-2xl border border-dashed p-3.5 text-center transition-colors ${
           dragOver
-            ? "border-emerald-400 bg-emerald-50"
-            : "border-slate-200 bg-white"
+            ? "border-[var(--color-ink)]/30 bg-white/50"
+            : "border-white/50 bg-white/20"
         }`}
       >
-        <p className="text-sm text-slate-600">{copy.pdf_upload_label}</p>
+        <p className="text-sm text-[var(--color-smoke)]">
+          {copy.pdf_upload_label}
+        </p>
         <button
           type="button"
           disabled={locked}
           onClick={() => fileRef.current?.click()}
-          className="mt-2 text-sm font-medium text-emerald-700 hover:underline disabled:opacity-40"
+          className="mt-1.5 text-sm font-medium text-[var(--color-ink)] underline-offset-2 hover:underline disabled:opacity-40"
         >
           Choose PDF
         </button>
@@ -272,7 +270,7 @@ export function JobColumn({
           }}
         />
         {uploadMsg && (
-          <p className="mt-2 text-xs text-slate-500">{uploadMsg}</p>
+          <p className="mt-2 text-xs text-[var(--color-smoke)]">{uploadMsg}</p>
         )}
       </div>
 
@@ -285,10 +283,10 @@ export function JobColumn({
         {copy.demo_job_button}
       </button>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="glass-inner min-h-0 flex-1 overflow-auto p-3.5">
         {!hasSpec ? (
-          <p className="text-sm text-slate-400">
-            Job details appear here after voice intake, PDF, or demo job.
+          <p className="text-sm text-[var(--color-ash)]">
+            Job details appear after voice, PDF, or demo job.
           </p>
         ) : (
           <dl className="space-y-2 text-sm">
@@ -298,10 +296,10 @@ export function JobColumn({
               return (
                 <div
                   key={f.key}
-                  className="flex justify-between gap-3 border-b border-slate-50 pb-1.5"
+                  className="flex justify-between gap-3 border-b border-white/30 pb-1.5"
                 >
-                  <dt className="text-slate-500">{f.label}</dt>
-                  <dd className="text-right font-medium text-slate-900">
+                  <dt className="text-[var(--color-smoke)]">{f.label}</dt>
+                  <dd className="text-right font-medium text-[var(--color-ink)]">
                     {String(val)}
                   </dd>
                 </div>
@@ -319,7 +317,7 @@ export function JobColumn({
       >
         {locked
           ? phase === "calling"
-            ? "Calling vendors…"
+            ? "Agents calling…"
             : "Confirmed"
           : copy.confirm_button}
       </button>
