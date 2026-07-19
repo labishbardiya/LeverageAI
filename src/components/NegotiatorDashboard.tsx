@@ -491,6 +491,7 @@ export function NegotiatorDashboard() {
             onListen={onListen}
             replay={replay}
             jobSpec={state.job_spec}
+            dealReview={state.deal_review}
           />
         </div>
       </main>

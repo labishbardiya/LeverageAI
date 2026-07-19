@@ -32,7 +32,7 @@ export function CallsColumn({
           {copy.calls_column_title}
         </h2>
         <p className="text-sm text-slate-500">
-          3 simultaneous negotiations · live transcript
+          Multi-agent · 3 parallel calls · live transcript
         </p>
       </header>
 

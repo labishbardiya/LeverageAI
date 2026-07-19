@@ -40,6 +40,7 @@ export function initialJobState(vertical: VerticalConfig): JobState {
     job_spec: null,
     sessions: emptySessions(vertical),
     ranked: [],
+    deal_review: null,
   };
 }
 
@@ -58,7 +59,12 @@ export function applyMockEvent(
 ): JobState {
   if (event.type === "complete") {
     const ranked = rankSessions(state.sessions, vertical);
-    return { ...state, phase: "complete", ranked };
+    return {
+      ...state,
+      phase: "complete",
+      ranked,
+      deal_review: buildClientDealReview(ranked, state.sessions, vertical),
+    };
   }
 
   const sessions = cloneSessions(state.sessions);
@@ -126,6 +132,96 @@ export function redFlagForPrice(
 }
 
 /** Rank itemized quotes; red-flag never recommended as #1 when never_rank_first. */
+/** Client-side review when replaying golden / mock streams (no API). */
+export function buildClientDealReview(
+  ranked: RankedDeal[],
+  sessions: SessionCard[],
+  vertical: VerticalConfig,
+): import("./types").DealReviewUi {
+  const top = ranked.find((r) => r.recommended) || ranked[0] || null;
+  const formatUsd = (n: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(n);
+
+  const why_top: string[] = [];
+  if (top?.session.current_price != null) {
+    why_top.push(
+      `We recommend ${top.session.vendor_name} at ${formatUsd(
+        top.session.current_price,
+      )} — a complete itemized total, not a teaser.`,
+    );
+    if (top.session.competing_bid_used) {
+      why_top.push(
+        "The agent used a real competing bid from another shop to negotiate the price down.",
+      );
+    }
+    why_top.push(
+      top.why ||
+        "This is the best clean quote after comparing all three simultaneous calls.",
+    );
+  } else {
+    why_top.push("No clean itemized winner yet.");
+  }
+
+  const others = ranked
+    .filter((r) => !top || r.session.vendor_id !== top.session.vendor_id)
+    .map((r) => {
+      if (r.red_flag && r.session.current_price != null) {
+        return `${r.session.vendor_name}: quoted ${formatUsd(
+          r.session.current_price,
+        )} but flagged as bait-risk (≥${redFlagThresholdPct(
+          vertical,
+        )}% under market mid).`;
+      }
+      if (r.session.outcome === "documented_decline") {
+        return `${r.session.vendor_name}: would not give a firm phone price.`;
+      }
+      return `${r.session.vendor_name}: ${r.why || "see call transcript."}`;
+    });
+
+  return {
+    headline: top
+      ? top.session.current_price != null
+        ? `Recommended: ${top.session.vendor_name} at ${formatUsd(
+            top.session.current_price,
+          )}`
+        : `Recommended: ${top.session.vendor_name}`
+      : "No single recommended deal yet",
+    top_pick: top
+      ? {
+          vendor_id: top.session.vendor_id,
+          vendor_name: top.session.vendor_name,
+          total: top.session.current_price,
+          outcome: top.session.outcome,
+          red_flag: top.red_flag,
+          red_flag_pct: top.red_flag_pct,
+          label: top.recommended ? "Best clean quote" : "Top ranked",
+          plain: top.why,
+        }
+      : null,
+    why_top,
+    how_others_compared: others,
+    how_we_negotiated: [
+      "Three AI negotiators called three providers at the same time.",
+      "Each call asked for an itemized installed total.",
+      "Suspicious under-market quotes never rank #1.",
+      "A review layer picked one clear recommendation for you.",
+    ],
+    confidence: top ? 88 : 40,
+    verdicts: sessions.map((s) => ({
+      vendor_id: s.vendor_id,
+      vendor_name: s.vendor_name,
+      total: s.current_price,
+      plain: s.why || s.outcome || "pending",
+      red_flag: Boolean(s.red_flag),
+      label: s.outcome || "pending",
+    })),
+  };
+}
+
 export function rankSessions(
   sessions: SessionCard[],
   vertical: VerticalConfig,
@@ -775,5 +871,16 @@ export function normalizeApiState(
     }
   }
 
-  return { job_id, phase, job_spec, sessions, ranked };
+  // Attach review layer when complete
+  let deal_review: JobState["deal_review"] = null;
+  if (phase === "complete" && ranked.length) {
+    const rawReview = (o as { deal_review?: JobState["deal_review"] })
+      .deal_review;
+    deal_review =
+      rawReview && typeof rawReview === "object"
+        ? rawReview
+        : buildClientDealReview(ranked, sessions, vertical);
+  }
+
+  return { job_id, phase, job_spec, sessions, ranked, deal_review };
 }

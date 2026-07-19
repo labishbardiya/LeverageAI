@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type {
   BenchmarkEntry,
+  DealReviewUi,
   RankedDeal,
   SessionCard,
   VerticalConfig,
@@ -18,6 +19,7 @@ type Props = {
   onListen: (vendor_id: string, ts: number) => void;
   replay?: boolean;
   jobSpec?: Record<string, unknown> | null;
+  dealReview?: DealReviewUi | null;
 };
 
 function formatUsd(n: number): string {
@@ -50,6 +52,7 @@ export function DealColumn({
   onListen,
   replay,
   jobSpec,
+  dealReview,
 }: Props) {
   const ready = phase === "complete" && ranked.length > 0;
   const copy = uiCopy(vertical);
@@ -116,12 +119,13 @@ export function DealColumn({
         <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center">
           <p className="text-sm text-slate-400">
             {phase === "calling"
-              ? "Ranking appears when all three calls finish."
-              : "Confirm your job to start calls."}
+              ? "Three agents negotiating in parallel — your deal appears when all finish."
+              : "Confirm your job to start simultaneous calls."}
           </p>
         </div>
       ) : (
         <div className="min-h-0 flex-1 space-y-3 overflow-auto">
+          {dealReview && <ReviewHero review={dealReview} />}
           {ranked.map((r) => (
             <DealCard
               key={r.session.vendor_id + r.rank}
@@ -138,6 +142,7 @@ export function DealColumn({
           <GrokOpinion
             reportJson={{
               vertical: vertical.id,
+              deal_review: dealReview,
               ranked: ranked.map((r) => ({
                 vendor: r.session.vendor_name,
                 total: r.session.current_price,
@@ -149,6 +154,83 @@ export function DealColumn({
         </div>
       )}
     </section>
+  );
+}
+
+function ReviewHero({ review }: { review: DealReviewUi }) {
+  return (
+    <article className="rounded-xl border border-emerald-300 bg-gradient-to-b from-emerald-50 to-white p-4 shadow-sm ring-1 ring-emerald-100">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-800">
+        Review layer · your deal
+      </p>
+      <h3 className="mt-1 text-lg font-semibold leading-snug text-slate-900">
+        {review.headline}
+      </h3>
+      {review.top_pick?.total != null && (
+        <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-800">
+          {formatUsd(review.top_pick.total)}
+        </p>
+      )}
+      {review.top_pick && (
+        <p className="mt-1 text-xs font-medium text-emerald-700">
+          {review.top_pick.label}
+          {review.top_pick.red_flag ? " · flagged" : " · clean quote"}
+        </p>
+      )}
+
+      <div className="mt-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Why this one (plain English)
+        </p>
+        <ul className="mt-1.5 space-y-1.5">
+          {review.why_top.map((line, i) => (
+            <li
+              key={i}
+              className="flex gap-2 text-sm leading-snug text-slate-700"
+            >
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {review.how_others_compared.length > 0 && (
+        <details className="mt-3 rounded-lg border border-slate-100 bg-white/80 p-2.5">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+            How the other two compared
+          </summary>
+          <ul className="mt-2 space-y-1.5 text-xs leading-snug text-slate-600">
+            {review.how_others_compared.map((line, i) => (
+              <li key={i}>• {line}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      <details className="mt-2 rounded-lg border border-slate-100 bg-white/80 p-2.5">
+        <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+          How multi-agent negotiation worked
+        </summary>
+        <ul className="mt-2 space-y-1 text-xs text-slate-600">
+          {review.how_we_negotiated.map((line, i) => (
+            <li key={i}>• {line}</li>
+          ))}
+        </ul>
+      </details>
+
+      <div className="mt-3 flex items-center gap-2">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+          <div
+            className="h-1.5 rounded-full bg-emerald-500"
+            style={{ width: `${Math.min(100, review.confidence)}%` }}
+          />
+        </div>
+        <span className="text-[11px] tabular-nums text-slate-500">
+          {review.confidence}% confidence
+        </span>
+      </div>
+    </article>
   );
 }
 

@@ -47,5 +47,9 @@ export type {
 } from "./types";
 
 export { isLiveModeEnabled, liveModeStatus } from "./liveMode";
-export { runAgentBridge, runBridgesSequential } from "./bridge";
+export {
+  runAgentBridge,
+  runBridgesSequential,
+  runBridgesParallel,
+} from "./bridge";
 export { fetchAndStoreRecording } from "./recordings";

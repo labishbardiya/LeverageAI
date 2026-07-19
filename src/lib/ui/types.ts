@@ -138,6 +138,34 @@ export type RankedDeal = {
   leverage_chain?: LeverageChainStep[];
 };
 
+/** Review layer output — plain-language top pick for the Deal column */
+export type DealReviewUi = {
+  headline: string;
+  top_pick: {
+    vendor_id: string;
+    vendor_name: string;
+    total: number | null;
+    outcome: string | null;
+    red_flag: boolean;
+    red_flag_pct?: number;
+    label: string;
+    plain: string;
+  } | null;
+  why_top: string[];
+  how_others_compared: string[];
+  how_we_negotiated: string[];
+  confidence: number;
+  verdicts?: Array<{
+    vendor_id: string;
+    vendor_name: string;
+    total: number | null;
+    plain: string;
+    red_flag: boolean;
+    label: string;
+  }>;
+  generated_at?: string;
+};
+
 export type UiPhase = "draft" | "confirmed" | "calling" | "complete";
 
 export type JobState = {
@@ -146,6 +174,7 @@ export type JobState = {
   job_spec: JobSpec | null;
   sessions: SessionCard[];
   ranked: RankedDeal[];
+  deal_review?: DealReviewUi | null;
 };
 
 export type MockEvent =

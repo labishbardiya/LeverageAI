@@ -30,13 +30,29 @@ export function TranscriptTicker({
   const viewportMaxH = visibleCount * 76;
 
   useEffect(() => {
-    if (lines.length > prevLen.current) {
+    const n = lines.filter((l) => {
+      const t = (l.text || "").trim();
+      if (!t) return false;
+      if (l.speaker === "system" && /^\[bridge\]/i.test(t)) return false;
+      if (l.speaker === "system" && /kickoff sent/i.test(t)) return false;
+      return true;
+    }).length;
+    if (n > prevLen.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-    prevLen.current = lines.length;
-  }, [lines.length, lines]);
+    prevLen.current = n;
+  }, [lines]);
 
-  if (!lines.length) {
+  // Hide internal orchestration markers (e.g. old "[bridge] kickoff…")
+  const visible = lines.filter((l) => {
+    const t = (l.text || "").trim();
+    if (!t) return false;
+    if (l.speaker === "system" && /^\[bridge\]/i.test(t)) return false;
+    if (l.speaker === "system" && /kickoff sent/i.test(t)) return false;
+    return true;
+  });
+
+  if (!visible.length) {
     return (
       <div
         className="flex items-center justify-center rounded-xl bg-[#e5ddd5]/30 px-3"
@@ -58,14 +74,14 @@ export function TranscriptTicker({
         aria-relevant="additions"
       >
         <ul className="flex flex-col gap-2">
-          {lines.map((line, idx) => {
+          {visible.map((line, idx) => {
             const isAgent =
               line.speaker === "negotiator" || line.speaker === "system";
             const isVendor = line.speaker === "vendor";
             const active =
               highlightTs != null && Math.abs(line.ts - highlightTs) < 0.5;
             // Animate messages that just entered (last visible batch)
-            const isNew = idx >= Math.max(0, lines.length - 3);
+            const isNew = idx >= Math.max(0, visible.length - 3);
 
             return (
               <li

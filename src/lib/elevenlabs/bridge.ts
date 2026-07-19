@@ -272,10 +272,10 @@ export async function runAgentBridge(
     // Small delay so initiation is processed
     await new Promise((r) => setTimeout(r, 400));
 
-    // Kickoff: negotiator starts the "call"
+    // Kickoff: synthetic homeowner brief so the negotiator opens the call.
+    // (Not shown as a chat bubble — it's internal orchestration, not spoken.)
     const kickoff = buildKickoff(intent);
     sendUserMessage(negWs, kickoff);
-    await append("system", `[bridge] kickoff sent to negotiator`);
     touch();
 
     const handleSide = (
@@ -416,6 +416,7 @@ export async function runAgentBridge(
   }
 }
 
+/** Sequential fallback (debug only). Prefer runBridgesParallel for live demos. */
 export async function runBridgesSequential(
   intents: BridgePairIntent[]
 ): Promise<BridgeResult[]> {
@@ -424,4 +425,19 @@ export async function runBridgesSequential(
     results.push(await runAgentBridge(intent));
   }
   return results;
+}
+
+/**
+ * Multi-agent orchestration: run all negotiator↔vendor bridges at once.
+ * Each vendor pair is independent; UI sees simultaneous transcripts.
+ */
+export async function runBridgesParallel(
+  intents: BridgePairIntent[]
+): Promise<BridgeResult[]> {
+  console.log(
+    `[bridge] parallel orchestration n=${intents.length} sessions=${intents
+      .map((i) => i.companyKey)
+      .join(",")}`
+  );
+  return Promise.all(intents.map((intent) => runAgentBridge(intent)));
 }

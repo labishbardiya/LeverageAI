@@ -10,7 +10,7 @@ import {
 import { publish } from "@/lib/db/events";
 import { isLiveModeEnabled } from "@/lib/elevenlabs/liveMode";
 import { getAgentId } from "@/lib/elevenlabs/env";
-import { runBridgesSequential } from "@/lib/elevenlabs/bridge";
+import { runBridgesParallel } from "@/lib/elevenlabs/bridge";
 import type { BridgePairIntent } from "@/lib/elevenlabs/types";
 import { fetchAndStoreRecording } from "@/lib/elevenlabs/recordings";
 import { simulateJobNegotiations } from "@/lib/sessions/simulateNegotiation";
@@ -220,12 +220,13 @@ export async function POST(req: NextRequest) {
       const jobId = job.id;
       scheduleBackground(async () => {
         console.log(
-          `[sessions/start] background bridges job=${jobId} n=${intents.length}`
+          `[sessions/start] parallel multi-agent bridges job=${jobId} n=${intents.length}`
         );
         try {
-          const results = await runBridgesSequential(intents);
+          // Simultaneous negotiator↔vendor pairs (not sequential)
+          const results = await runBridgesParallel(intents);
           console.log(
-            `[sessions/start] bridges done`,
+            `[sessions/start] bridges done (parallel)`,
             results.map((r) => ({ id: r.sessionId, ok: r.ok, err: r.error }))
           );
 

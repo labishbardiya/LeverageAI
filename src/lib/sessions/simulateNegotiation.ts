@@ -1,7 +1,7 @@
 /**
- * Deterministic server-side "live" negotiation for demos / reliable live shows.
- * Writes real transcripts + quotes to the store while the UI polls.
- * Does not require ElevenLabs bridges / Twilio — always works with DATABASE_URL.
+ * Deterministic server-side multi-agent negotiation.
+ * Runs all vendor tracks in parallel so the UI shows simultaneous activity.
+ * Writes real transcripts + quotes while the UI polls.
  */
 import { getStore } from "@/lib/db";
 import { publish } from "@/lib/db/events";
@@ -9,12 +9,13 @@ import { loadVertical } from "@/lib/config/loadVertical";
 import { logQuote } from "@/lib/tools/logQuote";
 import { closeSession } from "@/lib/tools/closeSession";
 import { recordToolCall } from "@/lib/tools/recordToolCall";
+import type { Session } from "@/lib/types";
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Build line items that sum exactly to `total` (required by log_quote honesty gate). */
+/** Line items that sum exactly to `total` (log_quote honesty gate). */
 function lineItems(
   total: number,
   parts: { label: string; weight: number }[]
@@ -57,65 +58,30 @@ async function mustLogQuote(raw: unknown): Promise<void> {
   }
 }
 
-/**
- * Run full 3-vendor HVAC-style script for a job (works for any vertical labels from config).
- */
-export async function simulateJobNegotiations(jobId: string): Promise<void> {
+async function markConnecting(jobId: string, sessions: Session[]) {
   const store = getStore();
-  const job = await store.getJob(jobId);
-  if (!job) {
-    console.warn("[simulate] job not found", jobId);
-    return;
-  }
-  if (job.status === "complete") {
-    console.log("[simulate] job already complete, skip", jobId);
-    return;
-  }
-  const vertical = loadVertical(job.vertical);
-  const sessions = await store.listSessionsByJob(jobId);
-  if (!sessions.length) {
-    console.warn("[simulate] no sessions", jobId);
-    return;
-  }
-  // Don't re-run if any session already has a structured outcome
-  if (sessions.some((s) => s.outcome_type != null)) {
-    console.log("[simulate] sessions already closed, skip", jobId);
-    return;
-  }
+  await Promise.all(
+    sessions.map(async (s) => {
+      await store.updateSession(s.id, { status: "connecting" });
+      publish({
+        type: "session",
+        job_id: jobId,
+        session_id: s.id,
+        payload: { status: "connecting" },
+      });
+    })
+  );
+}
 
-  // Prefer persona ids; fall back to order from vertical config
-  const byVendor = Object.fromEntries(sessions.map((s) => [s.vendor_id, s]));
-  const ordered = vertical.vendors
-    .map((v) => byVendor[v.id])
-    .filter(Boolean) as typeof sessions;
-  const tough = byVendor["tough"] ?? ordered[0];
-  const stone = byVendor["stonewaller"] ?? ordered[1];
-  const upsell = byVendor["upseller"] ?? ordered[2];
-  if (!tough || !stone || !upsell) {
-    console.warn("[simulate] missing vendor sessions", {
-      ids: sessions.map((s) => s.vendor_id),
-    });
-    return;
-  }
-
-  const mid =
-    vertical.benchmarks[vertical.default_job_type || ""]?.mid ??
-    vertical.benchmarks[Object.keys(vertical.benchmarks)[0]!]?.mid ??
-    7500;
-
-  // Dialing
-  for (const s of sessions) {
-    await store.updateSession(s.id, { status: "connecting" });
-    publish({
-      type: "session",
-      job_id: jobId,
-      session_id: s.id,
-      payload: { status: "connecting" },
-    });
-  }
-  await sleep(500);
-
-  // --- Tough (Summit-style) first offer ---
+/** Parallel track: tough vendor (price drop after competing bid). */
+async function runToughTrack(
+  jobId: string,
+  tough: Session,
+  mid: number,
+  getCompetingTotal: () => number | null
+): Promise<void> {
+  const toughOpen = Math.round(mid * 1.22);
+  await sleep(200);
   await say(
     tough.id,
     jobId,
@@ -124,7 +90,6 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     1000
   );
   await sleep(700);
-  const toughOpen = Math.round(mid * 1.22);
   await say(
     tough.id,
     jobId,
@@ -145,9 +110,87 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     ]),
     grand_total: toughOpen,
   });
-  await sleep(700);
 
-  // --- Upsell first (so tough can cite competing bid) ---
+  // Wait until upseller has a competing total (shared orchestration barrier)
+  let competing: number | null = null;
+  for (let i = 0; i < 40; i++) {
+    competing = getCompetingTotal();
+    if (competing != null) break;
+    await sleep(250);
+  }
+  if (competing == null) competing = Math.round(mid * 0.625);
+
+  await recordToolCall({
+    session_id: tough.id,
+    job_id: jobId,
+    tool_name: "get_competing_bids",
+    payload: {
+      result: {
+        ok: true,
+        bids: [
+          {
+            id: "sim-upsell",
+            vendor_id: "upseller",
+            total: competing,
+          },
+        ],
+      },
+    },
+  });
+  await say(
+    tough.id,
+    jobId,
+    "negotiator",
+    `I have a competing written bid logged at $${competing} for the same scope — can you beat a fair mid-market install?`,
+    5500
+  );
+  await sleep(600);
+  const toughFinal = Math.round(mid * 1.05);
+  await say(tough.id, jobId, "vendor", `Am I talking to a robot?`, 6000);
+  await sleep(400);
+  await say(
+    tough.id,
+    jobId,
+    "negotiator",
+    "Yes — I'm an AI assistant negotiating on behalf of my client. Happy to continue if that works.",
+    6500
+  );
+  await sleep(500);
+  await say(
+    tough.id,
+    jobId,
+    "vendor",
+    `Alright. If that's a real written number, I'll do $${toughFinal} installed, itemized.`,
+    7200
+  );
+  await mustLogQuote({
+    job_id: jobId,
+    session_id: tough.id,
+    company_key: tough.vendor_id,
+    company_name: tough.vendor_name,
+    currency: "USD",
+    line_items: lineItems(toughFinal, [
+      { label: "Equipment package", weight: 0.58 },
+      { label: "Labor & install", weight: 0.32 },
+      { label: "Permit & haul-away", weight: 0.1 },
+    ]),
+    grand_total: toughFinal,
+  });
+  const closeTough = await closeSession({
+    session_id: tough.id,
+    outcome_type: "itemized_quote",
+  });
+  if (!closeTough.ok) console.error("[simulate] close tough", closeTough);
+}
+
+/** Parallel track: upseller (bait → itemize → red flag). */
+async function runUpsellTrack(
+  jobId: string,
+  upsell: Session,
+  mid: number,
+  setCompetingTotal: (n: number) => void
+): Promise<number> {
+  await sleep(150);
   await say(
     upsell.id,
     jobId,
@@ -155,7 +198,7 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     "Calling for an itemized quote on the same confirmed job — please break out fees.",
     1500
   );
-  await sleep(600);
+  await sleep(550);
   const upsellTeaser = Math.round(mid * 0.56);
   await say(
     upsell.id,
@@ -175,7 +218,7 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     ]),
     grand_total: upsellTeaser,
   });
-  await sleep(500);
+  await sleep(400);
   await say(
     upsell.id,
     jobId,
@@ -183,8 +226,9 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     "Please itemize permit, haul-away, refrigerant, and diagnostic as well.",
     3500
   );
-  await sleep(700);
-  const upsellTotal = Math.round(mid * 0.625); // still low → red flag vs mid
+  await sleep(600);
+  const upsellTotal = Math.round(mid * 0.625);
+  setCompetingTotal(upsellTotal);
   await say(
     upsell.id,
     jobId,
@@ -217,78 +261,13 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     session_id: upsell.id,
     outcome_type: "itemized_quote",
   });
-  if (!closeUpsell.ok) {
-    console.error("[simulate] close upsell failed", closeUpsell);
-  }
-  await sleep(500);
+  if (!closeUpsell.ok) console.error("[simulate] close upsell", closeUpsell);
+  return upsellTotal;
+}
 
-  // Competing bid tool for tough
-  await recordToolCall({
-    session_id: tough.id,
-    job_id: jobId,
-    tool_name: "get_competing_bids",
-    payload: {
-      result: {
-        ok: true,
-        bids: [
-          {
-            id: "sim-upsell",
-            vendor_id: upsell.vendor_id,
-            total: upsellTotal,
-          },
-        ],
-      },
-    },
-  });
-  await say(
-    tough.id,
-    jobId,
-    "negotiator",
-    `I have a competing written bid logged at $${upsellTotal} for the same scope — can you beat a fair mid-market install?`,
-    5500
-  );
-  await sleep(700);
-  const toughFinal = Math.round(mid * 1.05);
-  await say(tough.id, jobId, "vendor", `Am I talking to a robot?`, 6000);
-  await sleep(450);
-  await say(
-    tough.id,
-    jobId,
-    "negotiator",
-    "Yes — I'm an AI assistant negotiating on behalf of my client. Happy to continue if that works.",
-    6500
-  );
-  await sleep(550);
-  await say(
-    tough.id,
-    jobId,
-    "vendor",
-    `Alright. If that's a real written number, I'll do $${toughFinal} installed, itemized.`,
-    7200
-  );
-  await mustLogQuote({
-    job_id: jobId,
-    session_id: tough.id,
-    company_key: tough.vendor_id,
-    company_name: tough.vendor_name,
-    currency: "USD",
-    line_items: lineItems(toughFinal, [
-      { label: "Equipment package", weight: 0.58 },
-      { label: "Labor & install", weight: 0.32 },
-      { label: "Permit & haul-away", weight: 0.1 },
-    ]),
-    grand_total: toughFinal,
-  });
-  const closeTough = await closeSession({
-    session_id: tough.id,
-    outcome_type: "itemized_quote",
-  });
-  if (!closeTough.ok) {
-    console.error("[simulate] close tough failed", closeTough);
-  }
-  await sleep(500);
-
-  // --- Stonewaller ---
+/** Parallel track: stonewaller (decline). */
+async function runStoneTrack(jobId: string, stone: Session): Promise<void> {
+  await sleep(180);
   await say(
     stone.id,
     jobId,
@@ -296,7 +275,7 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     "Can you provide an itemized phone quote for the same confirmed job?",
     2000
   );
-  await sleep(600);
+  await sleep(500);
   await say(
     stone.id,
     jobId,
@@ -304,7 +283,7 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     "We don't give firm prices over the phone — policy is on-site only.",
     3000
   );
-  await sleep(550);
+  await sleep(500);
   await say(
     stone.id,
     jobId,
@@ -312,7 +291,7 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     "Understood. Even a ballpark range would help the homeowner compare today.",
     4000
   );
-  await sleep(550);
+  await sleep(500);
   await say(
     stone.id,
     jobId,
@@ -325,9 +304,73 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     outcome_type: "documented_decline",
     callback_window: "weekday mornings next 2 business days",
   });
-  if (!closeStone.ok) {
-    console.error("[simulate] close stone failed", closeStone);
+  if (!closeStone.ok) console.error("[simulate] close stone", closeStone);
+}
+
+/**
+ * Run full multi-agent negotiation in parallel for a job.
+ */
+export async function simulateJobNegotiations(jobId: string): Promise<void> {
+  const store = getStore();
+  const job = await store.getJob(jobId);
+  if (!job) {
+    console.warn("[simulate] job not found", jobId);
+    return;
   }
+  if (job.status === "complete") {
+    console.log("[simulate] job already complete, skip", jobId);
+    return;
+  }
+  const vertical = loadVertical(job.vertical);
+  const sessions = await store.listSessionsByJob(jobId);
+  if (!sessions.length) {
+    console.warn("[simulate] no sessions", jobId);
+    return;
+  }
+  if (sessions.some((s) => s.outcome_type != null)) {
+    console.log("[simulate] sessions already closed, skip", jobId);
+    return;
+  }
+
+  const byVendor = Object.fromEntries(sessions.map((s) => [s.vendor_id, s]));
+  const ordered = vertical.vendors
+    .map((v) => byVendor[v.id])
+    .filter(Boolean) as Session[];
+  const tough = byVendor["tough"] ?? ordered[0];
+  const stone = byVendor["stonewaller"] ?? ordered[1];
+  const upsell = byVendor["upseller"] ?? ordered[2];
+  if (!tough || !stone || !upsell) {
+    console.warn("[simulate] missing vendor sessions", {
+      ids: sessions.map((s) => s.vendor_id),
+    });
+    return;
+  }
+
+  const mid =
+    vertical.benchmarks[vertical.default_job_type || ""]?.mid ??
+    vertical.benchmarks[Object.keys(vertical.benchmarks)[0]!]?.mid ??
+    7500;
+
+  // All three dial at once
+  await markConnecting(jobId, sessions);
+  await sleep(400);
+
+  // Shared orchestration state: upseller publishes competing total for tough
+  let competingTotal: number | null = null;
+  const setCompetingTotal = (n: number) => {
+    competingTotal = n;
+  };
+  const getCompetingTotal = () => competingTotal;
+
+  console.log(
+    `[simulate] parallel multi-agent start job=${jobId} vendors=tough,stonewaller,upseller`
+  );
+
+  await Promise.all([
+    runToughTrack(jobId, tough, mid, getCompetingTotal),
+    runUpsellTrack(jobId, upsell, mid, setCompetingTotal),
+    runStoneTrack(jobId, stone),
+  ]);
 
   await store.updateJob(jobId, { status: "complete" });
   publish({
@@ -335,5 +378,5 @@ export async function simulateJobNegotiations(jobId: string): Promise<void> {
     job_id: jobId,
     payload: { status: "complete" },
   });
-  console.log("[simulate] complete", jobId);
+  console.log("[simulate] parallel complete", jobId);
 }
