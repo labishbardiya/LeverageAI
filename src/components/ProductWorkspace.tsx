@@ -1054,13 +1054,7 @@ export function ProductWorkspace() {
         <div className="portal-content">
         <header className="portal-header-merge sticky top-0 z-30">
           <div className="mx-auto flex max-w-[var(--max)] items-center justify-between px-4 py-4 sm:px-6">
-            <a
-              href="/"
-              className="flex items-center gap-2 no-underline"
-              aria-label="LEVERAGE home"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-mark.svg" alt="" width={26} height={26} />
+            <a href="/" className="no-underline" aria-label="LEVERAGE home">
               <span className="logo-leverage logo-plain">LEVERAGE</span>
             </a>
           </div>

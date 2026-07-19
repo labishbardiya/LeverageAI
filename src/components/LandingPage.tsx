@@ -1,12 +1,15 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 /**
- * Landing — Instrument Serif headline, plain LEVERAGE + micro mark,
- * cloud video sky, Close Smart Deals → portal.
+ * Landing — same LEVERAGE wordmark placement as live portal (no A icon).
+ * Close Smart Deals = real buttons (header + under headline).
  */
 export function LandingPage() {
+  const router = useRouter();
+  const goPortal = () => router.push("/livee");
+
   return (
     <div className="landing-outer">
       <div className="landing-frame">
@@ -27,21 +30,21 @@ export function LandingPage() {
           <div className="landing-sky-veil" />
         </div>
 
-        <header className="landing-header landing-header-merge">
-          <div className="flex items-center gap-2.5" aria-label="LEVERAGE">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo-mark.svg"
-              alt=""
-              width={28}
-              height={28}
-              className="opacity-90"
-            />
-            <span className="logo-leverage logo-plain">LEVERAGE</span>
+        {/* Same shell as ProductWorkspace header */}
+        <header className="portal-header-merge sticky top-0 z-30">
+          <div className="mx-auto flex max-w-[var(--max)] items-center justify-between px-4 py-4 sm:px-6">
+            <span className="logo-leverage logo-plain" aria-label="LEVERAGE">
+              LEVERAGE
+            </span>
+            <button
+              type="button"
+              className="btn-close-smart-deals"
+              onClick={goPortal}
+            >
+              Close Smart Deals
+              <span aria-hidden>→</span>
+            </button>
           </div>
-          <Link href="/livee" className="link-cta">
-            Close Smart Deals →
-          </Link>
         </header>
 
         <main className="landing-main">
@@ -50,9 +53,14 @@ export function LandingPage() {
               <span className="landing-line">You name the job.</span>
               <span className="landing-line">We lock the price.</span>
             </h1>
-            <Link href="/livee" className="link-cta link-cta-lg">
-              Close Smart Deals →
-            </Link>
+            <button
+              type="button"
+              className="btn-close-smart-deals btn-close-smart-deals-lg"
+              onClick={goPortal}
+            >
+              Close Smart Deals
+              <span aria-hidden>→</span>
+            </button>
           </section>
 
           <section
