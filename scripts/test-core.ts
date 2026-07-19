@@ -11,6 +11,7 @@ import { verifyElevenLabsWebhook } from "../src/lib/security/elevenlabsWebhook";
 import { extractLearningsFromSession } from "../src/lib/learning/extract";
 import { buildEvidenceBundle } from "../src/lib/evidence/bundle";
 import {
+  cleanTranscriptEvents,
   enforceNoBookingCommitment,
   sanitizeTranscriptText,
 } from "../src/lib/evidence/transcript";
@@ -145,6 +146,15 @@ async function main() {
     /cannot book, purchase, authorize work/i,
   );
   const createdAt = new Date(0).toISOString();
+  assert.equal(
+    cleanTranscriptEvents([
+      { id: 1, session_id: "s-clean", speaker: "vendor", text: "The total is $590.", ts_ms: 1, created_at: createdAt },
+      { id: 2, session_id: "s-clean", speaker: "negotiator", text: "The total is $590.", ts_ms: 2, created_at: createdAt },
+      { id: 3, session_id: "s-clean", speaker: "vendor", text: "The total is $590...", ts_ms: 3, created_at: createdAt },
+    ]).length,
+    1,
+    "post-call duplicate and truncated transcript rows must not reach the UI",
+  );
   const evidenceQuote = {
     id: "q-evidence",
     session_id: "s-evidence",

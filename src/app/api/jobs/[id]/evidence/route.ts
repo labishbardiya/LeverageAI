@@ -9,7 +9,7 @@ import {
 } from "@/lib/review/booking";
 import { getPlaybook } from "@/lib/learning/extract";
 import { buildEvidenceBundle } from "@/lib/evidence/bundle";
-import { sanitizeTranscriptText } from "@/lib/evidence/transcript";
+import { cleanTranscriptEvents } from "@/lib/evidence/transcript";
 import { evidencedQuotes } from "@/lib/evidence/quoteEvidence";
 
 export const runtime = "nodejs";
@@ -30,10 +30,7 @@ export async function GET(request: NextRequest, context: Ctx) {
       store.listToolCallsByJob(id),
       getPlaybook(job.vertical),
     ]);
-    const transcripts = rawTranscripts.flatMap((event) => {
-      const text = sanitizeTranscriptText(event.text);
-      return text ? [{ ...event, text }] : [];
-    });
+    const transcripts = cleanTranscriptEvents(rawTranscripts);
     const quotes = evidencedQuotes(quotesRaw, transcripts);
     const vertical = loadVertical(job.vertical);
     const ranked = rankQuotes(quotes, vertical, sessions).map((quote) => ({

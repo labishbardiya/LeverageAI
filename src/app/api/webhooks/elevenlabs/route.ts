@@ -59,6 +59,10 @@ async function ingestTranscript(
   const store = getStore();
   const incoming = Array.isArray(data.transcript) ? data.transcript : [];
   const existing = await store.listTranscriptsBySession(session.id, 1000);
+  // The bridge persists canonical turns as they happen. Post-call payloads
+  // replay the full conversation and have previously inverted speakers, so
+  // never merge them into an already-live bridge transcript.
+  if (existing.length > 0) return 0;
   const existingCounts = new Map<string, number>();
   for (const event of existing) {
     const key = `${event.speaker}\u0000${event.text.trim()}`;

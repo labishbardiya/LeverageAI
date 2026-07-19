@@ -12,7 +12,7 @@ import {
   buildBookingRequestDraft,
   questionsBeforeBooking,
 } from "@/lib/review/booking";
-import { sanitizeTranscriptText } from "@/lib/evidence/transcript";
+import { cleanTranscriptEvents } from "@/lib/evidence/transcript";
 import { evidencedQuotes } from "@/lib/evidence/quoteEvidence";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -68,10 +68,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
     // Historical rows may include internal bridge prompts. Never return them
     // to the UI or evidence surface, even if they predate the sanitation fix.
-    const transcripts = rawTranscripts.flatMap((event) => {
-      const text = sanitizeTranscriptText(event.text);
-      return text ? [{ ...event, text }] : [];
-    });
+    const transcripts = cleanTranscriptEvents(rawTranscripts);
 
     // A logged tool value is not a quote until the provider has spoken it.
     const quotes = evidencedQuotes(quotesRaw, transcripts);

@@ -29,6 +29,34 @@ export function isDisplayableTranscript(value: unknown): value is string {
   return sanitizeTranscriptText(value) !== null;
 }
 
+type TranscriptLike = {
+  session_id: string;
+  text: string;
+  speaker: string;
+};
+
+/** Remove legacy webhook duplicates while keeping the first (bridge-canonical) turn. */
+export function cleanTranscriptEvents<T extends TranscriptLike>(events: T[]): T[] {
+  const seen = new Map<string, string[]>();
+  return events.flatMap((event) => {
+    const text = sanitizeTranscriptText(event.text);
+    if (!text) return [];
+    const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
+    const compact = normalized.replace(/[^a-z0-9$]+/g, "");
+    const prior = seen.get(event.session_id) || [];
+    const duplicate = prior.some(
+      (value) =>
+        value === compact ||
+        (compact.length >= 24 &&
+          (value.startsWith(compact) || compact.startsWith(value))),
+    );
+    if (duplicate) return [];
+    prior.push(compact);
+    seen.set(event.session_id, prior);
+    return [{ ...event, text }];
+  });
+}
+
 /** The product may request details, but it never books or accepts work. */
 export function enforceNoBookingCommitment(text: string): string {
   if (
