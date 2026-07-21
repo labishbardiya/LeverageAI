@@ -162,25 +162,12 @@ Only **persisted, itemized** quotes enter ranking. Fee-risk outliers and incompl
 
 ---
 
-## Live product map
-
-| Route | What judges see |
-|-------|-----------------|
-| [`/`](https://leverageai-tawny.vercel.app/) | Marketing landing + product demo video |
-| [`/livee`](https://leverageai-tawny.vercel.app/livee) | **Live product** — intake → confirm → discover → 3 chats → deal |
-| [`/live`](https://leverageai-tawny.vercel.app/live) | **Golden replay** — stage-safe deterministic path |
-| [`/live?vertical=movers`](https://leverageai-tawny.vercel.app/live?vertical=movers) | Config-swap proof (movers vertical) |
-
-> Honesty note for demos: discovery uses **real market data** for call-list realism. The challenge path negotiates against **isolated counter-agents** — not live PSTN calls to real shops. The product never pretends a real business was dialed.
-
----
-
 ## Architecture (simple view of a complex system)
 
 ```text
 ┌─────────────┐     ┌──────────────────┐     ┌────────────────────┐
 │  Next.js UI │────▶│  Orchestration   │────▶│  ElevenLabs Agents │
-│  /livee     │     │  XState + APIs   │     │  intake · 3× pairs │
+│  workspace  │     │  XState + APIs   │     │  intake · 3× pairs │
 └─────────────┘     └────────┬─────────┘     └─────────┬──────────┘
                              │                         │
                     ┌────────▼────────┐       tools · webhooks · transcripts
@@ -281,12 +268,7 @@ cp .env.example .env.local   # fill secrets locally — never commit
 npm run dev
 ```
 
-| URL | Purpose |
-|-----|---------|
-| http://localhost:3000 | Landing + demo video |
-| http://localhost:3000/livee | Live product |
-| http://localhost:3000/live | Golden replay |
-| http://localhost:3000/live?vertical=movers | Vertical config proof |
+Open the app at the local Next.js URL, or use the **live deployment**: https://leverageai-tawny.vercel.app
 
 ### Quality gates
 
