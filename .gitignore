@@ -24,7 +24,11 @@
 
 # misc
 .DS_Store
+**/.DS_Store
 *.pem
+*.key
+*.p12
+*.pfx
 
 # debug
 npm-debug.log*
@@ -32,19 +36,42 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files / secrets (never commit real keys)
 .env*
+!.env.example
 
-# vercel
+# vercel local link state
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
-# Local intro video assets (never push)
+# Local / editor / agent working notes (not for judges or public repo)
+HANDOFF_CODEX.md
+docs/handoff/
+.claude/
+.cursor/
+.grok/
+*.swp
+*~
+
+# Local media experiments — only public/media/** ships with the app
 demo-video/
 public/LeverageAI_Intro.mp4
+public/final.mp4
 *.mp4
+*.mov
+*.webm
+*.wav
+*.mp3
 !public/media/
 !public/media/**
+# never ship call recordings even if dropped under media
+public/media/recordings/
+public/media/demo/
+
+# local backups / exports
+*-backup*
+*-REJECTED*
+Downloads/

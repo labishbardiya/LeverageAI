@@ -61,10 +61,15 @@ export function LandingPage() {
             aria-label="Product demo"
           >
             <div className="landing-video-frame glass-liquid">
-              <div className="landing-video-blank">
-                <span className="landing-video-label">Demo video</span>
-                <span className="landing-video-hint">Coming soon</span>
-              </div>
+              <video
+                className="landing-video-player"
+                controls
+                playsInline
+                preload="metadata"
+              >
+                <source src="/media/final.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
             </div>
           </section>
         </main>
