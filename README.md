@@ -4,34 +4,40 @@
 
 **Your personal AI negotiator for high-stakes services** — one confirmed request, three parallel negotiations, and a recommendation you can defend with evidence.
 
-[![Live demo](https://img.shields.io/badge/Live-leverageai--tawny.vercel.app-black?style=for-the-badge)](https://leverageai-tawny.vercel.app)
-[![Product](https://img.shields.io/badge/Open-Close%20Smart%20Deals-0A84FF?style=for-the-badge)](https://leverageai-tawny.vercel.app/livee)
-[![Stack](https://img.shields.io/badge/Next.js%2016-·-React%2019-·-ElevenLabs-·-Neon-·-Vercel-111?style=for-the-badge)](https://leverageai-tawny.vercel.app)
+[![Live](https://img.shields.io/badge/Live-leverageai--tawny.vercel.app-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://leverageai-tawny.vercel.app)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![ElevenLabs](https://img.shields.io/badge/ElevenLabs-Agents-0A84FF?style=flat-square)](https://elevenlabs.io)
+[![Neon](https://img.shields.io/badge/Neon-Postgres-00E599?style=flat-square&logo=postgresql&logoColor=black)](https://neon.tech)
+[![Vercel](https://img.shields.io/badge/Vercel-Deployed-000000?style=flat-square&logo=vercel&logoColor=white)](https://leverageai-tawny.vercel.app)
 
 ---
 
 <p align="center">
-  <video
-    src="https://github.com/labishbardiya/LeverageAI/raw/main/public/media/final.mp4"
-    poster="https://github.com/labishbardiya/LeverageAI/raw/main/public/media/clouds-poster.jpg"
-    controls
-    playsinline
-    preload="metadata"
-    width="100%"
-  >
-    Your browser does not support the video tag.
-    <a href="https://leverageai-tawny.vercel.app/media/final.mp4">Watch the demo video</a>
-  </video>
+  <a href="https://www.youtube.com/watch?v=m1NqVvy3Emw&autoplay=1">
+    <img
+      src="https://img.youtube.com/vi/m1NqVvy3Emw/maxresdefault.jpg"
+      alt="LeverageAI product demo — click to play"
+      width="100%"
+    />
+  </a>
 </p>
 
+<!--
+  GitHub README cannot run iframes. Autoplay opens on YouTube (link above).
+  For docs/sites that allow iframes, use:
+  <iframe width="100%" height="480"
+    src="https://www.youtube.com/embed/m1NqVvy3Emw?autoplay=1&mute=1&playsinline=1&rel=0"
+    title="LeverageAI product demo"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen></iframe>
+-->
+
 <p align="center">
-  <a href="https://leverageai-tawny.vercel.app/media/final.mp4"><strong>▶ Full demo video</strong></a>
+  <strong><a href="https://www.youtube.com/watch?v=m1NqVvy3Emw&autoplay=1">▶ Watch demo</a></strong>
   &nbsp;·&nbsp;
-  <a href="https://leverageai-tawny.vercel.app"><strong>Live product</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://leverageai-tawny.vercel.app/livee"><strong>Close Smart Deals</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://leverageai-tawny.vercel.app/live"><strong>Golden replay</strong></a>
+  <strong><a href="https://leverageai-tawny.vercel.app">Live app</a></strong>
 </p>
 
 ---
@@ -369,10 +375,8 @@ scripts/             eval · smoke · provision · reliability
 
 | | |
 |--|--|
-| **Live** | https://leverageai-tawny.vercel.app |
-| **Demo video** | https://leverageai-tawny.vercel.app/media/final.mp4 |
-| **Close Smart Deals** | https://leverageai-tawny.vercel.app/livee |
-| **Golden replay** | https://leverageai-tawny.vercel.app/live |
+| **Live app** | https://leverageai-tawny.vercel.app |
+| **Demo video** | https://www.youtube.com/watch?v=m1NqVvy3Emw |
 | **Challenge law** | [AGENTS.md](./AGENTS.md) |
 | **Architecture** | [docs/ARCHITECTURE_DECISIONS.md](./docs/ARCHITECTURE_DECISIONS.md) |
 | **Hackathon write-up** | [HACKATHON_SUBMISSION.md](./HACKATHON_SUBMISSION.md) |
