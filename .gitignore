@@ -47,12 +47,18 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Local / editor / agent working notes (not for judges or public repo)
+# Local / editor / agent working notes (not for public repo)
+# Keep team handoffs, agent memory, and private build notes out of git.
 HANDOFF_CODEX.md
-docs/handoff/
+HANDOFF*.md
+docs/
+AGENTS.md
+DESIGN.md
+CLAUDE.md
 .claude/
 .cursor/
 .grok/
+.codex/
 *.swp
 *~
 

@@ -1,6 +1,6 @@
 /**
  * ElevenLabs agent IDs and API key from environment.
- * Secrets never hard-coded — see AGENTS.md.
+ * Secrets never hard-coded — use `.env.local` / Vercel env only.
  */
 
 export type NegotiatorAgentSlot =
@@ -10,7 +10,7 @@ export type NegotiatorAgentSlot =
   | "stonewaller"
   | "upseller";
 
-/** Canonical env keys (SETUP.md / provision script). */
+/** Canonical env keys (see README + provision script). */
 const AGENT_ENV_KEYS: Record<NegotiatorAgentSlot, string> = {
   intake: "ELEVENLABS_INTAKE_AGENT_ID",
   negotiator: "ELEVENLABS_NEGOTIATOR_AGENT_ID",
